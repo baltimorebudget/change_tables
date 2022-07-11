@@ -297,7 +297,8 @@ change_tables$position$detail <- change_single %>%
   mutate(
     `Change Type` = factor(
       `Change Type`, 
-      c("create", "service_to", "service_from", "fund_to", "fund_from", "eliminate", "reclass_to", "fund_non_gf"))) %>%
+      c("create", "service_to", "service_from", "fund_to", "fund_from", "eliminate", "reclass_to", "fund_non_gf")),
+    `Service ID` = as.numeric(`Service ID`)) %>%
   arrange(`AGENCY NAME`, `Service ID`, `Change Type`) %>%
   bind_rows(fund_non_gf %>%
               select(-`Change Single`) %>%
@@ -326,60 +327,59 @@ change_tables$position$summary <- df %>%
       str_replace_all(Change, " XX ", paste0(" ", `Num of Positions`, " "))),
     Change = ifelse(
       `Num of Positions` == 1, Change,
-      str_replace_all(Change, " position", " positions")))
+      str_replace_all(Change, " position", " positions")),
+    `Service ID` = as.numeric(`Service ID`))
 
-#salaries==================
-
-#nonglobal adjustments
-non_global <- import("G:/Budget Publications/automation/0_data_prep/inputs/Change Table Adjustments FY23.xlsx")
-
-non_global_adj <- non_global %>%
-  mutate_at(vars(ends_with("ID")), as.character) %>%
-  select(-starts_with("Agency"), -`DetailedFund ID`, -`Fund ID`, -`Activity ID`, Tag = `Object ID`,
-         -Type , -`One-Time or Recurring?`,
-         `Non-Global Adj Amount` = Amount, `Changes or adjustments` = `Change Table Note`) %>%
-  rename(`Service ID` = `Program ID`) %>%
-  group_by(`Service ID`, Tag) %>%
-  mutate(`Non-Global Adj Count` = n(),
-         `Non-Global Adj ID` = paste(`Service ID`, `Tag`, sep = "-")) %>%
+position_summary <- change_tables$position$summary %>%
+  filter(`FUND NAME` == "General") %>%
+  group_by(`Service ID`, `Object ID`) %>%
+  mutate(`Position Note` = paste(`Change`, collapse = ", ")) %>%
+  group_by(`Service ID`, `Object ID`, `Position Note`) %>%
+  summarise(`Salary Diff` = sum(`Salary Diff`, na.rm = TRUE),
+            `OPCs Diff`= sum(`OPCs Diff`, na.rm = TRUE), .groups = "drop") %>%
+  mutate(`Service ID` = as.numeric(`Service ID`)) %>%
   ungroup()
 
-flat_adjustments <- non_global %>%
-  filter(`Include in Change Table?` == "Yes") %>%
-  group_by(`Program ID`, `Change Table Note`) %>%
-  summarise(`Amount` = sum(`Amount`, na.rm = TRUE), .groups = "drop") %>%
-  ungroup() %>%
-  rename(`Service ID` = `Program ID`, `Changes or adjustments` = `Change Table Note`, `Difference` = `Amount`)
+
+#nonglobal adjustments==============
+# non_global <- import("G:/Budget Publications/automation/0_data_prep/inputs/Change Table Adjustments FY23.xlsx")
+# 
+# non_global_adj <- non_global %>%
+#   mutate_at(vars(ends_with("ID")), as.character) %>%
+#   select(-starts_with("Agency"), -`DetailedFund ID`, -`Fund ID`, -`Activity ID`, Tag = `Object ID`,
+#          -Type , -`One-Time or Recurring?`,
+#          `Non-Global Adj Amount` = Amount, `Changes or adjustments` = `Change Table Note`) %>%
+#   rename(`Service ID` = `Program ID`) %>%
+#   group_by(`Service ID`, Tag) %>%
+#   mutate(`Non-Global Adj Count` = n(),
+#          `Non-Global Adj ID` = paste(`Service ID`, `Tag`, sep = "-")) %>%
+#   ungroup()
+# 
+# flat_adjustments <- non_global %>%
+#   filter(`Include in Change Table?` == "Yes") %>%
+#   group_by(`Program ID`, `Object ID`, `Change Table Note`) %>%
+#   summarise(`Amount` = sum(`Amount`, na.rm = TRUE), .groups = "drop") %>%
+#   ungroup() %>%
+#   rename(`Service ID` = `Program ID`) %>%
+#   mutate(`Change Table Note` = paste0("Flat adjustment: ", `Change Table Note`, " at a cost of ", `Amount`))
 
 #make change table==================================
-change_table <- change_tables$obj$summary %>%
-  mutate(`Changes or adjustments` = case_when(
+  
+change_table <- left_join(change_tables$obj$summary, position_summary, by = c("Service ID")) %>%
+  # left_join(flat_adjustments, by = c("Service ID", "Object ID")) %>%
+  mutate(`Position Note` = case_when(`Object ID` == 1 & `Position Note` != "" ~ paste0(`Position Note`, " at a cost of ", `Salary Diff`),
+                            `Object ID` == 2 & `Position Note` != "" ~ paste0(`Position Note`, " at a cost of ", `OPCs Diff`),
+                            TRUE ~ ""),
+         `Changes or adjustments` = case_when(
     Diff > 0 ~ paste("Increase in", `Object Name`),
     Diff < 0 ~ paste("Decrease in", `Object Name`),
     Diff == 0 ~ paste("No change in", `Object Name`),
-    TRUE ~ `Object Name`)#,
-    # `Changes or adjustments` = factor(`Changes or adjustments`, c(
-    #   # "Salary adjustment",
-    #   # "Adjustment for other positional costs",
-    #   "Change in active employee health benefit costs",
-    #   "Change in pension contributions",
-    #   "Adjustment for City fleet rental, repair, and fuel charges",
-    #   "Adjustment for City building rental charges",
-    #   "Change in allocation for workers' compensation expense",
-    #   "Change in cost transfers to capital budget, to/from other funds, and reimbursed expenses",
-    #   paste(c("Increase in", "Decrease in", "No change in"), "employee compensation and benefits"),
-    #   paste(c("Increase in", "Decrease in", "No change in"), "contractual services expenses"),
-    #   paste(c("Increase in", "Decrease in", "No change in"), "operating supplies, equipment, software, and computer hardware"),
-    #   paste(c("Increase in", "Decrease in", "No change in"), "grants, contributions, and subsidies"),
-    #   paste(c("Increase in", "Decrease in", "No change in"), "all other")), ordered = TRUE)
-    ) %>%
-  select(`Service ID`, `Object ID`, `Changes or adjustments`, `Diff`) %>%
-  group_by(`Service ID`, `Object ID`, `Changes or adjustments`) %>%
+    TRUE ~ `Object Name`)) %>%
+  select(`Service ID`, `Object ID`, `Changes or adjustments`, `Diff`, `Position Note`) %>%
+  group_by(`Service ID`, `Object ID`, `Changes or adjustments`, `Position Note`) %>%
   summarise(`Difference` = sum(`Diff`, na.rm = TRUE), .groups = "drop") %>%
-  select(-`Object ID`)
-
-#join with flat adjustments
-test <- change_table %>% bind_rows(flat_adjustments) %>%
+  mutate(`Analyst Notes` = "") %>%
+  select(`Service ID`, `Changes or adjustments`, `Difference`, `Position Note`, `Analyst Notes`) %>% 
   arrange(desc(`Service ID`))
 
 #budget data
@@ -396,7 +396,7 @@ budget <- change_tables$gen_fund %>%
 group_by(`Agency ID`, `Agency Name`, `Service ID`, `Service Name`, `Changes or adjustments`) %>%
   summarize(Amount = sum(Amount, na.rm = TRUE))
 
-for (i in c(642)) {
+for (i in c(883)) {
     budg <- budget %>% filter(`Service ID` == i)
     table <- change_table %>% filter(`Service ID` == i)
   
@@ -408,8 +408,7 @@ for (i in c(642)) {
                                   TRUE ~ `Amount`),
              `Notes` = "") %>%
       ungroup()%>%
-      select(`Service ID`, `Changes or adjustments`, `Amount`, `Notes`) %>%
-      filter(Amount != 0)
+      select(`Service ID`, `Changes or adjustments`, `Amount`, `Position Note`, `Analyst Notes`)
     
     diff = filter(change_tables$df, !grepl("Budget", `Changes or adjustments`)) %>% select(Amount) %>% sum()
     minuend = change_tables$df$Amount[change_tables$df$`Changes or adjustments`==paste(cols[2], "Budget")]
@@ -417,7 +416,8 @@ for (i in c(642)) {
     
     if (diff == (minuend - subtrahend)) {print("All good.")}
     else if (diff != (minuend - subtrahend)) {print("Numbers don't add up.")}
-
+    
+    export_excel(change_tables$df, i, paste0("Change table ", i, "_FY", params$start_yr, params$start_phase, "-FY", params$end_yr, params$end_phase, ".xlsx"))
 return(change_tables$df)
 }
 
