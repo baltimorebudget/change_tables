@@ -75,7 +75,8 @@ clean_pos_files <- function(df) {
            `Classification Name` = ifelse(
              toupper(`CLASSIFICATION NAME`) == `CLASSIFICATION NAME`,
              tools::toTitleCase(tolower(`CLASSIFICATION NAME`)),
-             `CLASSIFICATION NAME`))
+             `CLASSIFICATION NAME`)) %>%
+    select(-`CLASSIFICATION NAME`)
   return(df)
 }
 
@@ -305,6 +306,7 @@ change_tables$position$detail <- change_single %>%
     `Service ID` = as.numeric(`Service ID`)) %>%
   arrange(`AGENCY NAME`, `Service ID`, `Change Type`) %>%
   bind_rows(fund_non_gf %>%
+              mutate(`Service ID` = as.numeric(`Service ID`))%>%
               select(-`Change Single`) %>%
               rename(Change = `Change Multiple`) %>%
               mutate(`Change Type` = "fund_non_gf",
