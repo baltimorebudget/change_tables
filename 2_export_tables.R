@@ -81,108 +81,48 @@ create_analyst_dirs <- function(path, additional_folders = NULL) {
 
 create_analyst_dirs()
 
-agencies <- analysts$`Agency Name` %>% unique()
+agencies <- file_info$agencies$`Agency Name` %>% unique()
 
 ##export services by agency and analyst=========
 export_change_table_file <- function(agency, change_table_df) {
 
- file_name <- paste0(file_info$analysts$`File Start`[file_info$agencies == agency], "/Change Table", "_FY", params$start_yr, params$start_phase, "-FY", params$end_yr, params$end_phase, ".xlsx")
- agency <- gsub("&", "and", agency)
- 
- output <- change_table_df %>% filter(`Agency Name` == agency) %>% arrange(`Service ID`)
- 
- svcs <- output %>%
-   group_by(`Service ID`) %>%
-   # remove any services without a budget in current AND target FY
-   filter(any(Amount != 0)) %>%
-   ungroup() %>%
-   extract2("Service ID") %>%
-   unique() %>%
-   sort()
- 
-#Excel
- if (nrow(output) > 0) {
+  file_name <- paste0(file_info$analysts$`File Start`[file_info$agencies == agency], "/Change Table", "_FY", params$start_yr, params$start_phase, "-FY", params$end_yr, params$end_phase, ".xlsx")
+  
+  agency <- gsub("&", "and", agency)
+  
+  output <- change_table_df %>% filter(`Agency Name` == agency) %>% arrange(`Service ID`)
+  
+  svcs <- output %>%
+    group_by(`Service ID`) %>%
+    # remove any services without a budget in current AND target FY
+    filter(any(Amount != 0)) %>%
+    ungroup() %>%
+    extract2("Service ID") %>%
+    unique() %>%
+    sort()
+  
+  #Excel
+  if (nrow(output) > 0) {
+    
+    for (i in svcs) {
+      
+      df <- output %>% 
+        filter(`Service ID` == i)
+      
+      excel <- suppressMessages(
+        export_excel(df = df, tab_name = i, file_name = file_name,
+                     save = FALSE,
+                     type = ifelse(i == svcs[1], "new", "existing")))
+      
+      openxlsx::saveWorkbook(excel, file_name, overwrite = TRUE)
 
-   for (i in svcs) {
+     # cat(".") # progress bar of sorts
 
-     df <- output %>%
-       filter(`Service ID` == i)
-     
-     ##numbers check
-   #   diff = filter(df, !grepl("Budget", `Changes or adjustments`)) %>% select(Amount) %>% sum()
-   #   minuend = df$Amount[df$`Changes or adjustments`==paste(cols[2], "Budget")]
-   #   subtrahend = df$Amount[df$`Changes or adjustments`==paste(cols[1], "Budget")]
-   # 
-   #   if (!is.na(diff)){
-   #     if (diff == (minuend - subtrahend)) {
-   #       print("All good.")
-   #     } else if (diff != (minuend - subtrahend)) {
-   #       print("Numbers don't add up.")
-   #     }
-   # }
-
-     excel <- suppressMessages(
-       bbmR::export_excel(df, i, file_name, save = FALSE,
-                    # col_width = c(10, 20, 90, 15, "auto",  rep(15, 3), "auto", 30),
-                    type = ifelse(i == svcs[1], "new", "existing")))
-
-     openxlsx::saveWorkbook(excel, file_name, overwrite = TRUE)
-
-  #    cat(".") # progress bar of sorts
-  # 
-  # cat("Change table file saved as", file_name, "\n")}
-}}}
+  cat("Change table file saved as", file_name, "\n")}
+}}
 
 map(agencies, export_change_table_file, change_tables$agency)
 
- # for (a in analysts$Analyst) {
- #   f = analysts$`File Start`[analysts$Analyst == a]
- #   
- #   for (j in analysts$`Agency Name`) {
- #     
- #     svc <- analysts %>% 
- #       left_join(change_tables$gen_fund, by = c("Agency ID")) %>%
- #       filter(Analyst == a) %>%
- #       select(`Service ID`) %>%
- #       filter(!is.na(`Service ID`)) %>%
- #       unique()
- #     
- #     l = f[grep(j, f)]
- #     if (!file.exists(l)) 
- #       {dir.create(l)}
- #     
- #     for (i in svc$`Service ID`) {
- #       budg <- budget %>% filter(`Service ID` == i)
- #       table <- change_table %>% filter(`Service ID` == i)
- #       file_path <- paste0(getwd(), "/", l, "/FY", params$start_yr, params$start_phase, "_", "FY", params$end_yr, params$end_phase, "_", Sys.Date(), "/")
- #       if (!file.exists(file_path)) 
- #         {dir.create(file_path)}
- #       
- #       file_name <- paste0("Change table ", j, "_FY", params$start_yr, params$start_phase, "-FY", params$end_yr, params$end_phase, ".xlsx")
- #       
- #       change_tables$df <- budg %>% filter(`Changes or adjustments` == paste0(cols[1], " Budget")) %>%
- #         bind_rows(table) %>%
- #         bind_rows(budg %>% filter(`Changes or adjustments` == paste0(cols[2], " Budget"))) %>%
- #         mutate(`Amount` = case_when(is.na(`Amount`) ~ `Difference`,
- #                                     TRUE ~ `Amount`),
- #                `Notes` = "") %>%
- #         ungroup()%>%
- #         select(`Service ID`, `Changes or adjustments`, `Amount`, `Position Note`, `Analyst Notes`)
- #       
- #       diff = filter(change_tables$df, !grepl("Budget", `Changes or adjustments`)) %>% select(Amount) %>% sum()
- #       minuend = change_tables$df$Amount[change_tables$df$`Changes or adjustments`==paste(cols[2], "Budget")]
- #       subtrahend = change_tables$df$Amount[change_tables$df$`Changes or adjustments`==paste(cols[1], "Budget")]
- #       
- #       if (diff == (minuend - subtrahend)) {print("All good.")}
- #       else if (diff != (minuend - subtrahend)) {print("Numbers don't add up.")}
- #       
- #       if (file.exists(paste0(file_path, file_name)))  
- #               {export_excel(change_tables$df, i, paste0(file_path, file_name), type = "existing")}
- #       else 
- #         {export_excel(change_tables$df, i, paste0(file_path, file_name), type = "new")}
- #       #return(change_tables$df)
- #     }}}
- 
 
 ##export full data ===========================================
 export_excel(change_tables$oso$detail, "OSO Detail", paste0(getwd(),"/outputs/FY23 CLS - COU OSO Changes.xlsx"), type = "new")
