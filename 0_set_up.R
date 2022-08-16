@@ -1,14 +1,16 @@
 params <- list(
  #set start and end points
+  #CLS, Proposal, TLS, FinRec, BoE, Cou, Adopted
   start_phase = "CLS",
   start_yr = 23,
   end_phase = "COU",
   end_yr = 23,
   fy = 23,
   # most up-to-date line item and position files for planning year
-  line.item = "G:/Fiscal Years/Fiscal 2023/Planning Year/7. Council/1. Line Item Reports/line_items_2022-06-24_Final.xlsx",
-  position.start = "G:/Fiscal Years/Fiscal 2023/Planning Year/1. CLS/2. Position Reports/PositionsSalariesOpcs_2021-11_03.xlsx",
+  line.end = "G:/Fiscal Years/Fiscal 2023/Planning Year/7. Council/1. Line Item Reports/line_items_2022-06-24_Final.xlsx",
+  line.start = "G:/Fiscal Years/Fiscal 2023/Planning Year/1. CLS/1. Line Item Reports/History/line_items_2021-11-01_CLS FINAL.xlsx",
   position.end = "G:/Fiscal Years/Fiscal 2023/Planning Year/7. Council/3. Position Reports/PositionsSalariesOpcs_2022-06-23.xlsx",
+  position.start = "G:/Fiscal Years/Fiscal 2023/Planning Year/1. CLS/2. Position Reports/PositionsSalariesOpcs_2021-11_03.xlsx",
   # leave revenue file blank if not yet available; script will then just pull in last FY's data
   revenue = "G:/BBMR - Revenue Team/1. Fiscal Years/Fiscal 2023/Planning Year/Budget Publication/FY 2023 - Budget Publication - Prelim.xlsx"
 )
@@ -59,7 +61,7 @@ source("G:/Budget Publications/automation/0_data_prep/bookDataPrep/R/setup.R")
 ##formatting ===============================
 # Getting service list from appropriations file ensures that defunct services are ignored
 services <- import(get_last_mod(paste0("G:/Fiscal Years/Fiscal 20", params$fy - 1,
-                                       "/Projections Year/"), "^[^~]*Appropriation.*.xlsx")) %>%
+                                       "/Projections Year/1. July 1 Prepwork/Appropriation File"), "^[^~]*Appropriation.*.xlsx")) %>%
   set_colnames(rename_cols(.)) %>%
   # remove services without one-pagers
   distinct(`Agency Name`, `Service ID`) %>%

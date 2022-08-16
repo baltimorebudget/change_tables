@@ -1,10 +1,24 @@
 ##read in data =====================
-line_item <- readxl::read_excel(path = params$line.item, sheet = "Details") %>%
+cols <- c(paste0("FY", params$start_yr, " ", params$start_phase), paste0("FY", params$end_yr, " ", params$end_phase), paste0("FY", params$start_yr, " COU"))
+
+line_item_start <- readxl::read_excel(path = params$line.start, sheet = "Details") %>%
   rename(`Service ID` = `Program ID`,
          `Service Name` = `Program Name`)
 
+line_item_end <- readxl::read_excel(path = params$line.end, sheet = "Details") %>%
+  rename(`Service ID` = `Program ID`,
+         `Service Name` = `Program Name`)
+
+##bring in analyst notes
+
+test <- full_join(line_item_start, line_item_end,  
+                  by = c("Agency ID", "Agency Name", "Service ID", "Service Name", "Activity ID", "Activity Name", 
+                  "Subactivity ID", "Subactivity Name", "Fund ID", "Fund Name", "DetailedFund ID", 
+                  "DetailedFund Name", "Object ID", "Object Name", "Subobject ID", "Subobject Name")) %>%
+  select(-ends_with(".x"))
+
 change_tables <- list(
-  gen_fund = line_item %>%
+  gen_fund = line_item_end %>%
     filter(`Fund ID` == 1001 & !is.na(`Agency ID`)) %>%
     select(`Agency ID`:`Subobject Name`,
            !!sym(cols[1]), !!sym(cols[2]),
@@ -41,6 +55,7 @@ change_tables$obj$summary <-  change_tables$obj$detail %>%
   ungroup()
 
 #positions=================
+
 position_start <- readxl::read_excel(path = params$position.start, sheet = cols[1])
 position_end <- readxl::read_excel(path = params$position.end, sheet = cols[2])
 

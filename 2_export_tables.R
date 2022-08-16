@@ -57,7 +57,10 @@ file_info <- list(
                             "/", `Agency Name - Cleaned`)),
   agencies = import("G:/Analyst Folders/Sara Brumfield/_ref/Analyst Assignments.xlsx") %>%
     filter(`Operational` == "TRUE") %>%
-    select(`Agency Name`)
+    select(`Agency Name`),
+  short = import("G:/Analyst Folders/Sara Brumfield/_ref/Analyst Assignments.xlsx") %>%
+    filter(`Operational` == "TRUE") %>%
+    select(`Agency Name`, `Agency Short`)
 )
 
 create_analyst_dirs <- function(path, additional_folders = NULL) {
@@ -86,7 +89,12 @@ agencies <- file_info$agencies$`Agency Name` %>% unique()
 ##export services by agency and analyst=========
 export_change_table_file <- function(agency, change_table_df) {
 
-  file_name <- paste0(file_info$analysts$`File Start`[file_info$agencies == agency], "/Change Table", "_FY", params$start_yr, params$start_phase, "-FY", params$end_yr, params$end_phase, ".xlsx")
+  file_name <- paste0(file_info$analysts$`File Start`[file_info$agencies == agency], 
+                      "/Change Table_", 
+                      file_info$short$`Agency Short`[file_info$short$`Agency Name` == agency], 
+                      "_FY", 
+                      params$start_yr, params$start_phase, 
+                      "-FY", params$end_yr, params$end_phase, "_", Sys.Date(), ".xlsx")
   
   agency <- gsub("&", "and", agency)
   
