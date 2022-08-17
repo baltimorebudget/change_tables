@@ -1,4 +1,16 @@
 #make change table==================================
+#make rows for all object id's (0-9)
+obj_ids <- change_tables$gen_fund %>%
+  select(`Object ID`, `Object Name`) %>%
+  unique() 
+
+svc_ids <- change_tables$gen_fund %>%
+  select(`Service ID`, `Service Name`) %>%
+  unique() 
+
+obj_base <- crossing(obj_ids, svc_ids) %>%
+  filter(`Object ID` != 2)
+
 
 change_table <- left_join(change_tables$obj$summary, position_summary, by = c("Service ID", "Object ID")) %>%
   # left_join(flat_adjustments, by = c("Service ID", "Object ID")) %>%
@@ -13,8 +25,11 @@ change_table <- left_join(change_tables$obj$summary, position_summary, by = c("S
   group_by(`Service ID`, `Object ID`, `Changes or adjustments`, `Position Note`) %>%
   summarise(`Difference` = sum(`Diff`, na.rm = TRUE), .groups = "drop") %>%
   mutate(`Analyst Notes` = "") %>%
-  select(`Service ID`, `Changes or adjustments`, `Difference`, `Position Note`, `Analyst Notes`) %>% 
+  select(`Service ID`, `Object ID`, `Changes or adjustments`, `Difference`, `Position Note`, `Analyst Notes`) %>% 
   arrange(desc(`Service ID`))
+
+change_table_ids <- left_join(obj_base, change_table, by = c("Service ID", "Object ID")) %>%
+  select(`Service ID`, `Object ID`, `Changes or adjustments`, `Difference`, `Position Note`, `Analyst Notes`)
 
 #budget data
 budget <- change_tables$gen_fund %>%
@@ -30,22 +45,24 @@ budget <- change_tables$gen_fund %>%
   group_by(`Agency ID`, `Agency Name`, `Service ID`, `Service Name`, `Changes or adjustments`) %>%
   summarize(Amount = sum(Amount, na.rm = TRUE))
 
+svcs <- change_tables$gen_fund %>% select(`Service ID`) %>% unique()
 
 #combine data
 change_tables$df <- budget %>% filter(`Changes or adjustments` == paste0(cols[1], " Budget")) %>%
-  bind_rows(change_table) %>%
+  bind_rows(change_table_ids) %>%
   bind_rows(budget %>% filter(`Changes or adjustments` == paste0(cols[2], " Budget"))) %>%
   mutate(`Amount` = case_when(is.na(`Amount`) ~ `Difference`,
                               TRUE ~ `Amount`),
          `Notes` = "") %>%
-  ungroup()%>%
-  select(`Service ID`, `Changes or adjustments`, `Amount`, `Position Note`, `Analyst Notes`)
+  ungroup() %>%
+  select(`Service ID`, `Object ID`, `Changes or adjustments`, `Amount`, `Position Note`, `Analyst Notes`)
 
 
 #add agency back in for filtering
 ag_svc <- change_tables$gen_fund %>% select(`Agency Name`, `Service ID`) %>% unique()
-change_tables$agency <- change_tables$df %>% left_join(ag_svc, by = "Service ID")
+change_tables$agency <- change_tables$df %>% left_join(ag_svc, by = "Service ID") 
 
+change_tables$agency$`Object ID`[change_tables$agency$`Object ID` == 1] <- "1, 2"
 
 ##make folders and file paths=================
 
@@ -111,7 +128,7 @@ export_change_table_file <- function(agency, change_table_df) {
   
   #Excel
   if (nrow(output) > 0) {
-    
+    n = 1
     for (i in svcs) {
       
       df <- output %>% 
@@ -122,8 +139,10 @@ export_change_table_file <- function(agency, change_table_df) {
                      save = FALSE,
                      type = ifelse(i == svcs[1], "new", "existing")))
       
+      # mergeCells(excel, n, cols = 5, rows = 2:12)
+      setColWidths(excel, n, 5, widths = 45, hidden = FALSE)
       openxlsx::saveWorkbook(excel, file_name, overwrite = TRUE)
-
+      n = n + 1
      # cat(".") # progress bar of sorts
 
   cat("Change table file saved as", file_name, "\n")}
