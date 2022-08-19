@@ -1,5 +1,8 @@
 ##read in data =====================
-cols <- c(paste0("FY", params$start_yr, " ", params$start_phase), paste0("FY", params$end_yr, " ", params$end_phase), paste0("FY", params$start_yr, " COU"))
+cols <- c(paste0("FY", params$start_yr, " ", params$start_phase), 
+          paste0("FY", params$end_yr, " ", params$end_phase), 
+          paste0("FY", params$start_yr, " COU"),
+          paste0("FY", params$start_yr, " All Positions File"))
 
 line_item_start <- readxl::read_excel(path = params$line.start, sheet = "Details") %>%
   rename(`Service ID` = `Program ID`,
@@ -8,14 +11,6 @@ line_item_start <- readxl::read_excel(path = params$line.start, sheet = "Details
 line_item_end <- readxl::read_excel(path = params$line.end, sheet = "Details") %>%
   rename(`Service ID` = `Program ID`,
          `Service Name` = `Program Name`)
-
-##bring in analyst notes
-
-test <- full_join(line_item_start, line_item_end,  
-                  by = c("Agency ID", "Agency Name", "Service ID", "Service Name", "Activity ID", "Activity Name", 
-                  "Subactivity ID", "Subactivity Name", "Fund ID", "Fund Name", "DetailedFund ID", 
-                  "DetailedFund Name", "Object ID", "Object Name", "Subobject ID", "Subobject Name")) %>%
-  select(-ends_with(".x"))
 
 change_tables <- list(
   gen_fund = line_item_end %>%
@@ -55,12 +50,12 @@ change_tables$obj$summary <-  change_tables$obj$detail %>%
   ungroup()
 
 #positions=================
-
-position_start <- readxl::read_excel(path = params$position.start, sheet = cols[1])
+##Year start requires some manual changes.
+position_start <- readxl::read_excel(path = params$position.start, sheet = cols[4])
 position_end <- readxl::read_excel(path = params$position.end, sheet = cols[2])
 
 pos_cols <- list( # dynamic col names based on FY
-  planning = list(
+  base = list(
     salary = "Salary FY",
     opcs = "OPCs FY",
     total_cost = "Total Cost FY",
@@ -71,12 +66,12 @@ pos_cols <- list( # dynamic col names based on FY
     fund_id = "Fund ID FY",
     fund_name = "Fund Name FY"))
 
-pos_cols$projection <- pos_cols$planning %>%
-  map(function(x) paste0(x, params$fy, " ", params$start_phase)) %>%
+pos_cols$projection <- pos_cols$base %>%
+  map(function(x) paste0(x, params$start_yr, " ", params$start_phase)) %>%
   map(sym)
 
-pos_cols$planning <- pos_cols$planning %>%
-  map(function(x) paste0(x, params$fy, " ", params$end_phase)) %>%
+pos_cols$planning <- pos_cols$base %>%
+  map(function(x) paste0(x, params$end_yr, " ", params$end_phase)) %>%
   map(sym)
 
 
@@ -126,7 +121,7 @@ df$service_from <- position_end %>%
   left_join(position_start %>%
               select(`JOB NUMBER`, `Service ID`, `Service Name`, Salary, OPCs, `TOTAL COST`),
             by = "JOB NUMBER",
-            suffix = c(paste0(" FY", params$fy, " ", params$start_phase), paste0(" FY", params$fy, " ", params$end_phase))) %>%
+            suffix = c(paste0(" FY", params$start_yr, " ", params$start_phase), paste0(" FY", params$end_yr, " ", params$end_phase))) %>%
   filter(!!pos_cols$projection$service_id != !!pos_cols$planning$service_id) %>%
   mutate(`Change Single` = paste0("transfer XX ", `Classification Name`, " position from Service ",
                                   !!pos_cols$projection$service_id,
@@ -141,7 +136,7 @@ df$service_to <- position_start %>%
   left_join(position_end %>%
               select(`JOB NUMBER`, `Service ID`, `Service Name`, Salary, OPCs, `TOTAL COST`),
             by = "JOB NUMBER",
-            suffix = c(paste0(" FY", params$fy, " ", params$start_phase), paste0(" FY", params$fy, " ", params$end_phase)))  %>%
+            suffix = c(paste0(" FY", params$start_yr, " ", params$start_phase), paste0(" FY", params$end_yr, " ", params$end_phase)))  %>%
   filter(!!pos_cols$projection$service_id != !!pos_cols$planning$service_id) %>%
   mutate(`Change Single` =
            paste0("transfer XX ", `Classification Name`, " position to Service ",
@@ -160,7 +155,7 @@ df$reclass_to <- position_start %>%
   left_join(position_end %>%
               select(`JOB NUMBER`, `Service ID`, `Classification ID`, `Classification Name`, Salary, OPCs, `TOTAL COST`),
             by = "JOB NUMBER",
-            suffix = c(paste0(" FY", params$fy, " ", params$start_phase), paste0(" FY", params$fy, " ", params$end_phase)))  %>%
+            suffix = c(paste0(" FY", params$start_yr, " ", params$start_phase), paste0(" FY", params$end_yr, " ", params$end_phase)))  %>%
   filter(!!pos_cols$projection$class_id !=
            !!pos_cols$planning$class_id) %>%
   mutate(`Change Single` = paste("reclassify XX",
@@ -183,7 +178,7 @@ df$fund <- position_start %>%
   left_join(position_end %>%
               select(`JOB NUMBER`, `Service ID`, `Fund ID`, `Fund Name`, Salary, OPCs, `TOTAL COST`),
             by = "JOB NUMBER",
-            suffix = c(paste0(" FY", params$fy, " ", params$start_phase), paste0(" FY", params$fy, " ", params$end_phase)))  %>%
+            suffix = c(paste0(" FY", params$start_yr, " ", params$start_phase), paste0(" FY", params$end_yr, " ", params$end_phase)))  %>%
   filter(!!pos_cols$projection$fund_id != !!pos_cols$planning$fund_id) %>%
   mutate(`Change Single` = 
            case_when(
@@ -339,8 +334,8 @@ change_tables$position$summary <- df %>%
   rename(`Num of Positions` = n) %>%
   filter(!is.na(`AGENCY NAME`)) %>% # get rid of manually totaled rows
   ungroup() %>%
-  select(-(!!sym(paste0("Salary FY", params$fy, " ", params$start_phase)):`Total Cost Diff`),
-         !!sym(paste0("Salary FY", params$fy, " ", params$end_phase)):`Total Cost Diff`) %>%
+  select(-(!!sym(paste0("Salary FY", params$start_yr, " ", params$start_phase)):`Total Cost Diff`),
+         !!sym(paste0("Salary FY", params$end_yr, " ", params$end_phase)):`Total Cost Diff`) %>%
   mutate(
     Change = ifelse(
       `Num of Positions` == 1,
@@ -355,7 +350,8 @@ position_summary <- change_tables$position$summary %>%
   mutate(`Object ID` = 1) %>%
   filter(`FUND NAME` == "General") %>%
   group_by(`Service ID`, `Object ID`) %>%
-  mutate(`Position Note` = paste(`Change`, collapse = ", ")) %>%
+  #force new lines between notes for readability
+  mutate(`Position Note` = paste(`Change`, collapse = "\n ")) %>%
   group_by(`Service ID`, `Object ID`, `Position Note`) %>%
   summarise(`Total Cost Diff` = sum(`Total Cost Diff`, na.rm = TRUE), .groups = "drop") %>%
   mutate(`Service ID` = as.numeric(`Service ID`)) %>%

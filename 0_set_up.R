@@ -1,16 +1,16 @@
 params <- list(
  #set start and end points
   #CLS, Proposal, TLS, FinRec, BoE, Cou, Adopted
-  start_phase = "CLS",
+  start_phase = "Adopted",
   start_yr = 23,
-  end_phase = "COU",
-  end_yr = 23,
-  fy = 23,
+  end_phase = "CLS",
+  end_yr = 24,
+  fy = 24,
   # most up-to-date line item and position files for planning year
-  line.end = "G:/Fiscal Years/Fiscal 2023/Planning Year/7. Council/1. Line Item Reports/line_items_2022-06-24_Final.xlsx",
-  line.start = "G:/Fiscal Years/Fiscal 2023/Planning Year/1. CLS/1. Line Item Reports/History/line_items_2021-11-01_CLS FINAL.xlsx",
-  position.end = "G:/Fiscal Years/Fiscal 2023/Planning Year/7. Council/3. Position Reports/PositionsSalariesOpcs_2022-06-23.xlsx",
-  position.start = "G:/Fiscal Years/Fiscal 2023/Planning Year/1. CLS/2. Position Reports/PositionsSalariesOpcs_2021-11_03.xlsx",
+  line.start = "G:/Fiscal Years/Fiscal 2023/Projections Year/1. July 1 Prepwork/Appropriation File/Fiscal 2023 Appropriation File_Change_Tables.xlsx",
+  line.end = "G:/Fiscal Years/Fiscal 2024/Planning Year/1. CLS/1. Line Item Reports/line_items_2022-08-18_CLS_Master.xlsx",
+  position.start = "G:/Fiscal Years/Fiscal 2023/Projections Year/1. July 1 Prepwork/Positions/Fiscal 2023 Appropriation File_Change_Tables.xlsx",
+  position.end = "G:/Fiscal Years/Fiscal 2024/Planning Year/1. CLS/2. Position Reports/PositionsSalariesOpcs_2022-08_19_CLS_WorkdayPositionUpdate.xlsx",
   # leave revenue file blank if not yet available; script will then just pull in last FY's data
   revenue = "G:/BBMR - Revenue Team/1. Fiscal Years/Fiscal 2023/Planning Year/Budget Publication/FY 2023 - Budget Publication - Prelim.xlsx"
 )
@@ -48,6 +48,7 @@ library(assertthat)
 library(httr)
 library(jsonlite)
 library(openxlsx)
+library(readxl)
 
 devtools::load_all("G:/Analyst Folders/Sara Brumfield/bbmR")
 source("G:/Budget Publications/automation/0_data_prep/bookDataPrep/R/change_table.R")

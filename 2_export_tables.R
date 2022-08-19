@@ -11,7 +11,23 @@ svc_ids <- change_tables$gen_fund %>%
 obj_base <- crossing(obj_ids, svc_ids) %>%
   filter(`Object ID` != 2)
 
+#read in analyst notes
+notes.files <- list.files(".", pattern = "*2022-08-19.xlsx", full.names = TRUE, recursive = TRUE)
+notes.sheets <- map(notes.files, excel_sheets)
 
+notes.services = NA
+for (lst in notes.sheets) {
+  for (i in lst) {
+  notes.services <- c(notes.services, i)
+  }}
+
+#pull in data from each sheet in each file
+
+notes.list <- map(notes.files, read.xlsx, function(x) {
+  
+})
+
+#create change table parent file
 change_table <- left_join(change_tables$obj$summary, position_summary, by = c("Service ID", "Object ID")) %>%
   # left_join(flat_adjustments, by = c("Service ID", "Object ID")) %>%
   mutate(`Position Note` = case_when(`Object ID` == 1 & `Position Note` != "" ~ paste0(`Position Note`, " at a cost of ", `Total Cost Diff`),
@@ -55,7 +71,8 @@ change_tables$df <- budget %>% filter(`Changes or adjustments` == paste0(cols[1]
                               TRUE ~ `Amount`),
          `Notes` = "") %>%
   ungroup() %>%
-  select(`Service ID`, `Object ID`, `Changes or adjustments`, `Amount`, `Position Note`, `Analyst Notes`)
+  rename(`Automated Notes` = `Position Note`)
+  select(`Service ID`, `Object ID`, `Changes or adjustments`, `Amount`, `Automated Notes`, `Analyst Notes`)
 
 
 #add agency back in for filtering
@@ -139,8 +156,13 @@ export_change_table_file <- function(agency, change_table_df) {
                      save = FALSE,
                      type = ifelse(i == svcs[1], "new", "existing")))
       
+      ##style elements
       # mergeCells(excel, n, cols = 5, rows = 2:12)
+      style <- createStyle(wrapText = TRUE)
+      addStyle(excel, sheet = n, style, cols = 5:6, rows = 2:12, gridExpand = TRUE)
       setColWidths(excel, n, 5, widths = 45, hidden = FALSE)
+      # writeFormula(excel, n, x = "CHAR(10)", startCol = 5, startRow = 2)
+      
       openxlsx::saveWorkbook(excel, file_name, overwrite = TRUE)
       n = n + 1
      # cat(".") # progress bar of sorts
