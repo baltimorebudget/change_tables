@@ -7,6 +7,7 @@ params <- list(
   end_yr = 24,
   fy = 24,
   # most up-to-date line item and position files for planning year
+  # verify with William for most current version
   line.start = "G:/Fiscal Years/Fiscal 2023/Projections Year/1. July 1 Prepwork/Appropriation File/Fiscal 2023 Appropriation File_Change_Tables.xlsx",
   line.end = "G:/Fiscal Years/Fiscal 2024/Planning Year/1. CLS/1. Line Item Reports/line_items_2022-08-18_CLS_Master.xlsx",
   position.start = "G:/Fiscal Years/Fiscal 2023/Projections Year/1. July 1 Prepwork/Positions/Fiscal 2023 Appropriation File_Change_Tables.xlsx",
@@ -49,6 +50,9 @@ library(httr)
 library(jsonlite)
 library(openxlsx)
 library(readxl)
+library(random)
+library(stringr)
+library(stringi)
 
 devtools::load_all("G:/Analyst Folders/Sara Brumfield/bbmR")
 source("G:/Budget Publications/automation/0_data_prep/bookDataPrep/R/change_table.R")

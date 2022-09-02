@@ -12,20 +12,57 @@ obj_base <- crossing(obj_ids, svc_ids) %>%
   filter(`Object ID` != 2)
 
 #read in analyst notes
-notes.files <- list.files(".", pattern = "*2022-08-19.xlsx", full.names = TRUE, recursive = TRUE)
-notes.sheets <- map(notes.files, excel_sheets)
+notes <- list()
 
-notes.services = NA
-for (lst in notes.sheets) {
+#get all files
+notes$files <- list.files(".", pattern = "*2022-09-02.xlsx", full.names = TRUE, recursive = TRUE)
+
+#get metadata for files
+notes$df = data.frame(Agency = character(), Services = factor(), File = character())
+  for (f in notes$files) {
+    xtrct = str_extract_all(f, '([^/]+)(?:[^/])')
+    notes$df <- notes$df %>% add_row(Agency = xtrct[[1]][3], Services = c(excel_sheets(f)), File = f)
+  }
+
+##check
+notes$sheets <- map(notes$files, excel_sheets)
+notes$services = vector(mode = "list", length = 0)
+for (lst in notes$sheets) {
   for (i in lst) {
-  notes.services <- c(notes.services, i)
-  }}
+    notes$services <- c(notes$services, i)
+  }
+}
 
-#pull in data from each sheet in each file
+if (dim(notes$df)[1] == length(notes$services)) {
+  print("All services accounted for.")} else {
+    print("Services missing.")
+  }
 
-notes.list <- map(notes.files, read.xlsx, function(x) {
-  
-})
+gf_svcs <- unique(change_tables$gen_fund$`Service ID`)
+`%!in%` <- Negate(`%in%`)
+for (i in notes$services) {
+  if (i %!in% gf_svcs) {
+    print(paste(i, " is not in General Fund."))
+    }
+  }
+
+
+#pull in data from each previous sheet in each file
+df_notes = data.frame()
+for (f in notes$df$File) {
+  svcs <- notes$df$Services[notes$df$File == f]
+  for (s in svcs) {
+    mini_df <- read_excel(f, s)
+    df_notes <- rbind(df_notes, mini_df)
+  }
+}
+
+##check
+for (s in unique(df_notes$`Service ID`)) {
+  if (s %!in% notes$services) {
+    print(paste(s, " is missing."))
+  }
+}
 
 #create change table parent file
 change_table <- left_join(change_tables$obj$summary, position_summary, by = c("Service ID", "Object ID")) %>%
@@ -71,7 +108,7 @@ change_tables$df <- budget %>% filter(`Changes or adjustments` == paste0(cols[1]
                               TRUE ~ `Amount`),
          `Notes` = "") %>%
   ungroup() %>%
-  rename(`Automated Notes` = `Position Note`)
+  rename(`Automated Notes` = `Position Note`) %>%
   select(`Service ID`, `Object ID`, `Changes or adjustments`, `Amount`, `Automated Notes`, `Analyst Notes`)
 
 
@@ -80,6 +117,16 @@ ag_svc <- change_tables$gen_fund %>% select(`Agency Name`, `Service ID`) %>% uni
 change_tables$agency <- change_tables$df %>% left_join(ag_svc, by = "Service ID") 
 
 change_tables$agency$`Object ID`[change_tables$agency$`Object ID` == 1] <- "1, 2"
+
+##testing only!! add random strings to Analyst Notes to test carry forward process
+# change_tables$agency$`Analyst Notes` <- random::randomStrings(n = dim(change_tables$agency)[1], len = 10, digits = FALSE)
+
+##add analyst notes from previous file!!
+test <- left_join(change_tables$agency, df_notes, by = c("Service ID", "Object ID", "Agency Name")) %>%
+  rename("Analyst Notes" = "Analyst Notes.y", "Changes or adjustments" = "Changes or adjustments.x", "Amount" = "Amount.x", "Automated Notes" = "Automated Notes.x") %>%
+  select(`Agency Name`, `Service ID`, `Object ID`, `Changes or adjustments`, `Amount`, `Automated Notes`, `Analyst Notes`)
+
+##remove duplicates! from blank Object ID joins -OR- tell analysts not to enter notes there.
 
 ##make folders and file paths=================
 

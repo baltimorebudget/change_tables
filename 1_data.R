@@ -351,7 +351,7 @@ position_summary <- change_tables$position$summary %>%
   filter(`FUND NAME` == "General") %>%
   group_by(`Service ID`, `Object ID`) %>%
   #force new lines between notes for readability
-  mutate(`Position Note` = paste(`Change`, collapse = "\n ")) %>%
+  mutate(`Position Note` = paste(`Change`, collapse = " \\n ")) %>%
   group_by(`Service ID`, `Object ID`, `Position Note`) %>%
   summarise(`Total Cost Diff` = sum(`Total Cost Diff`, na.rm = TRUE), .groups = "drop") %>%
   mutate(`Service ID` = as.numeric(`Service ID`)) %>%
