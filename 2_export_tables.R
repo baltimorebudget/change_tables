@@ -209,6 +209,7 @@ export_change_table_file <- function(agency, change_table_df) {
       addStyle(excel, sheet = n, style, cols = 5:6, rows = 2:12, gridExpand = TRUE)
       setColWidths(excel, n, 5, widths = 45, hidden = FALSE)
       # writeFormula(excel, n, x = "CHAR(10)", startCol = 5, startRow = 2)
+      #freeze notes cells next to budget lines
       
       openxlsx::saveWorkbook(excel, file_name, overwrite = TRUE)
       n = n + 1
