@@ -1,3 +1,83 @@
+##combines R scripts 0-2
+
+params <- list(
+  #set start and end points
+  #CLS, Proposal, TLS, FinRec, BoE, Cou, Adopted
+  start_phase = "Adopted",
+  start_yr = 23,
+  end_phase = "CLS",
+  end_yr = 24,
+  fy = 24,
+  # most up-to-date line item and position files for planning year
+  # verify with William for most current version
+  line.start = "G:/Fiscal Years/Fiscal 2023/Projections Year/1. July 1 Prepwork/Appropriation File/Fiscal 2023 Appropriation File_Change_Tables.xlsx",
+  line.end = "G:/Fiscal Years/Fiscal 2024/Planning Year/1. CLS/1. Line Item Reports/line_items_2022-11-2_CLS FINAL AFTER BPFS.xlsx",
+  position.start = "G:/Fiscal Years/Fiscal 2023/Projections Year/1. July 1 Prepwork/Positions/Fiscal 2023 Appropriation File_Change_Tables.xlsx",
+  position.end = "G:/Fiscal Years/Fiscal 2024/Planning Year/1. CLS/2. Position Reports/PositionsSalariesOpcs_2022-11-2b_CLS FINAL AFTER BPFS.xlsx",
+  # leave revenue file blank if not yet available; script will then just pull in last FY's data
+  revenue = "G:/BBMR - Revenue Team/1. Fiscal Years/Fiscal 2023/Planning Year/Budget Publication/FY 2023 - Budget Publication - Prelim.xlsx"
+)
+
+##dynamic col names======
+# generate_cols <- function() {
+#   ordered_cols <- list("CLS" = 1, "Proposal" = 2, "TLS" = 3, "FinRec" = 4, "BoE" = 5, "COU" = 6)
+#   x = list()
+#   #if phases are part of the same fiscal y ear
+#   if (params$start_yr == params$end_yr) {
+#     start_index = ordered_cols[[params$start_phase]]
+#     end_index = ordered_cols[[params$end_phase]]
+#     for (i in start_index:end_index) {
+#       j = paste0("FY", params$fy, " ", names(ordered_cols)[i])
+#       x = append(x, j)
+#     }
+#   }
+#   else if (params$start_yr != params$end_yr) {
+#     print("Still working on it.")
+#   }
+#   return(x)
+# }
+# 
+# cols <- c(paste0("FY", params$start_yr, " ", params$start_phase), paste0("FY", params$end_yr, " ", params$end_phase))
+# n = length(cols)
+
+
+##libraries ==============================
+# .libPaths("C:/Users/sara.brumfield2/Anaconda3/envs/bbmr/Lib/R/library")
+.libPaths("C:/Users/sara.brumfield2/OneDrive - City Of Baltimore/Documents/r_library")
+library(tidyverse)
+library(magrittr)
+library(rio)
+library(assertthat)
+library(httr)
+library(jsonlite)
+library(openxlsx)
+library(readxl)
+library(random)
+library(stringr)
+library(stringi)
+
+devtools::load_all("G:/Analyst Folders/Sara Brumfield/_packages/bbmR")
+source("G:/Budget Publications/automation/0_data_prep/bookDataPrep/R/change_table.R")
+source("G:/Budget Publications/automation/0_data_prep/bookDataPrep/R/export.R")
+source("G:/Budget Publications/automation/0_data_prep/bookDataPrep/R/import.R")
+source("G:/Budget Publications/automation/0_data_prep/bookDataPrep/R/osos.R")
+source("G:/Budget Publications/automation/0_data_prep/bookDataPrep/R/positions.R")
+source("G:/Budget Publications/automation/0_data_prep/bookDataPrep/R/scorecard.R")
+source("G:/Budget Publications/automation/0_data_prep/bookDataPrep/R/setup.R")
+
+##formatting ===============================
+# Getting service list from appropriations file ensures that defunct services are ignored
+services <- import(get_last_mod(paste0("G:/Fiscal Years/Fiscal 20", params$fy - 1,
+                                       "/Projections Year/1. July 1 Prepwork/Appropriation File"), "^[^~]*Appropriation.*.xlsx")) %>%
+  set_colnames(rename_cols(.)) %>%
+  # remove services without one-pagers
+  distinct(`Agency Name`, `Service ID`) %>%
+  extract2("Service ID")
+services <- c(services, "833", "619", "168") # add Innovation Fund
+
+# set number formatting for openxlsx
+options("openxlsx.numFmt" = "#,##0;(#,##0)")
+
 ##read in data =====================
 cols <- c(paste0("FY", params$start_yr, " ", params$start_phase), 
           paste0("FY", params$end_yr, " ", params$end_phase), 
@@ -32,9 +112,9 @@ change_tables$obj$detail <- change_tables$gen_fund %>%
   mutate(Diff = !!sym(cols[2]) - !!sym(cols[1])) %>%
   ungroup() %>%
   mutate(`Percent Change` = Diff / !!sym(cols[1]),
-    # `Signif Diff` = ifelse((Diff > 5000 | Diff < -5000) & 
-    #                          (`Percent Change` >= 0.2 | `Percent Change` <= -0.2), "Yes", "No"),
-    `Percent Change` = scales::percent(`Percent Change`, accuracy = 0.1))
+         # `Signif Diff` = ifelse((Diff > 5000 | Diff < -5000) & 
+         #                          (`Percent Change` >= 0.2 | `Percent Change` <= -0.2), "Yes", "No"),
+         `Percent Change` = scales::percent(`Percent Change`, accuracy = 0.1))
 
 change_tables$obj$summary <-  change_tables$obj$detail %>%
   mutate(`Object ID` = case_when(`Object ID` %in% c(1,2) ~ 1,
@@ -77,10 +157,9 @@ pos_cols$planning <- pos_cols$base %>%
 
 clean_pos_files <- function(df) {
   df <- df %>%
-  select(-starts_with("OSO")) %>%
+    select(-starts_with("OSO")) %>%
     mutate_if(is.numeric , replace_na, replace = 0) %>%
-    mutate(OPCs = `TOTAL COST` - Salary) %>%
-    select(-`CLASSIFICATION NAME`)
+    mutate(OPCs = `TOTAL COST` - Salary) 
   return(df)
 }
 
@@ -345,32 +424,242 @@ position_summary <- change_tables$position$summary %>%
   filter(`FUND NAME` == "General") %>%
   group_by(`Service ID`, `Object ID`) %>%
   #force new lines between notes for readability
-  mutate(`Position Note` = paste(`Change`, collapse = " \n")) %>%
+  mutate(`Position Note` = paste(`Change`, collapse = " \n ")) %>%
   group_by(`Service ID`, `Object ID`, `Position Note`) %>%
   summarise(`Total Cost Diff` = sum(`Total Cost Diff`, na.rm = TRUE), .groups = "drop") %>%
   mutate(`Service ID` = as.numeric(`Service ID`)) %>%
   ungroup()
 
+#make change table==================================
+#make rows for all object id's (0-9)
+obj_ids <- change_tables$gen_fund %>%
+  select(`Object ID`, `Object Name`) %>%
+  unique() 
 
-#nonglobal adjustments==============
-# non_global <- import("G:/Budget Publications/automation/0_data_prep/inputs/Change Table Adjustments FY23.xlsx")
-# 
-# non_global_adj <- non_global %>%
-#   mutate_at(vars(ends_with("ID")), as.character) %>%
-#   select(-starts_with("Agency"), -`DetailedFund ID`, -`Fund ID`, -`Activity ID`, Tag = `Object ID`,
-#          -Type , -`One-Time or Recurring?`,
-#          `Non-Global Adj Amount` = Amount, `Changes or adjustments` = `Change Table Note`) %>%
-#   rename(`Service ID` = `Program ID`) %>%
-#   group_by(`Service ID`, Tag) %>%
-#   mutate(`Non-Global Adj Count` = n(),
-#          `Non-Global Adj ID` = paste(`Service ID`, `Tag`, sep = "-")) %>%
-#   ungroup()
-# 
-# flat_adjustments <- non_global %>%
-#   filter(`Include in Change Table?` == "Yes") %>%
-#   group_by(`Program ID`, `Object ID`, `Change Table Note`) %>%
-#   summarise(`Amount` = sum(`Amount`, na.rm = TRUE), .groups = "drop") %>%
-#   ungroup() %>%
-#   rename(`Service ID` = `Program ID`) %>%
-#   mutate(`Change Table Note` = paste0("Flat adjustment: ", `Change Table Note`, " at a cost of ", `Amount`))
+svc_ids <- change_tables$gen_fund %>%
+  select(`Service ID`, `Service Name`) %>%
+  unique() 
 
+obj_base <- crossing(obj_ids, svc_ids) %>%
+  filter(`Object ID` != 2)
+
+#read in analyst notes ===================
+# notes <- list()
+# 
+# #get all files
+# notes$files <- list.files(".", pattern = "*2022-09-02.xlsx", full.names = TRUE, recursive = TRUE)
+# 
+# #get metadata for files
+# notes$df = data.frame(Agency = character(), Services = factor(), File = character())
+# for (f in notes$files) {
+#   xtrct = str_extract_all(f, '([^/]+)(?:[^/])')
+#   notes$df <- notes$df %>% add_row(Agency = xtrct[[1]][3], Services = c(excel_sheets(f)), File = f)
+# }
+# 
+# ##check
+# notes$sheets <- map(notes$files, excel_sheets)
+# notes$services = vector(mode = "list", length = 0)
+# for (lst in notes$sheets) {
+#   for (i in lst) {
+#     notes$services <- c(notes$services, i)
+#   }
+# }
+# 
+# if (dim(notes$df)[1] == length(notes$services)) {
+#   print("All services accounted for.")} else {
+#     print("Services missing.")
+#   }
+# 
+# gf_svcs <- unique(change_tables$gen_fund$`Service ID`)
+# `%!in%` <- Negate(`%in%`)
+# for (i in notes$services) {
+#   if (i %!in% gf_svcs) {
+#     print(paste(i, " is not in General Fund."))
+#   }
+# }
+# 
+# 
+# #pull in data from each previous sheet in each file 
+# df_notes = data.frame()
+# for (f in notes$df$File) {
+#   svcs <- notes$df$Services[notes$df$File == f]
+#   for (s in svcs) {
+#     mini_df <- read_excel(f, s)
+#     df_notes <- rbind(df_notes, mini_df)
+#   }
+# }
+# 
+# ##check
+# for (s in unique(df_notes$`Service ID`)) {
+#   if (s %!in% notes$services) {
+#     print(paste(s, " is missing."))
+#   }
+# }
+
+#create change table parent file ===================================
+change_table <- left_join(change_tables$obj$summary, position_summary, by = c("Service ID", "Object ID")) %>%
+  # left_join(flat_adjustments, by = c("Service ID", "Object ID")) %>%
+  mutate(`Position Note` = case_when(`Object ID` == 1 & `Position Note` != "" ~ paste0(`Position Note`, " at a cost of ", `Total Cost Diff`),
+                                     TRUE ~ ""),
+         `Changes or adjustments` = case_when(
+           Diff > 0 ~ paste("Increase in", `Object Name`),
+           Diff < 0 ~ paste("Decrease in", `Object Name`),
+           Diff == 0 ~ paste("No change in", `Object Name`),
+           TRUE ~ `Object Name`)) %>%
+  select(`Service ID`, `Object ID`, `Changes or adjustments`, `Diff`, `Position Note`) %>%
+  group_by(`Service ID`, `Object ID`, `Changes or adjustments`, `Position Note`) %>%
+  summarise(`Difference` = sum(`Diff`, na.rm = TRUE), .groups = "drop") %>%
+  mutate(`Analyst Notes` = "") %>%
+  select(`Service ID`, `Object ID`, `Changes or adjustments`, `Difference`, `Position Note`, `Analyst Notes`) %>% 
+  arrange(desc(`Service ID`))
+
+change_table_ids <- full_join(obj_base, change_table, by = c("Service ID", "Object ID")) %>%
+  select(`Service ID`, `Object ID`, `Changes or adjustments`, `Difference`, `Position Note`, `Analyst Notes`)
+
+#budget data
+budget <- change_tables$gen_fund %>%
+  pivot_longer(cols = c(!!sym(cols[1]), !!sym(cols[2])),
+               names_to = "Changes or adjustments",
+               values_to = "Amount") %>%
+  mutate(`Changes or adjustments` = case_when(
+    `Changes or adjustments` == cols[1] ~
+      paste0(cols[1], " Budget"),
+    `Changes or adjustments` == cols[2] ~
+      paste0(cols[2], " Budget"),
+    TRUE ~ `Changes or adjustments`)) %>%
+  group_by(`Agency ID`, `Agency Name`, `Service ID`, `Service Name`, `Changes or adjustments`) %>%
+  summarize(Amount = sum(Amount, na.rm = TRUE))
+
+svcs <- change_tables$gen_fund %>% select(`Service ID`) %>% unique()
+
+#combine data
+change_tables$df <- budget %>% filter(`Changes or adjustments` == paste0(cols[1], " Budget")) %>%
+  bind_rows(change_table_ids) %>%
+  bind_rows(budget %>% filter(`Changes or adjustments` == paste0(cols[2], " Budget"))) %>%
+  mutate(`Amount` = case_when(is.na(`Amount`) ~ `Difference`,
+                              TRUE ~ `Amount`),
+         `Notes` = "",
+          `Changes or adjustments` = case_when(is.na(`Changes or adjustments`) & `Object ID` == 0 ~ "No Transfers",
+                                               is.na(`Changes or adjustments`) & `Object ID` == 1 ~ "No Employee Costs",
+                                               is.na(`Changes or adjustments`) & `Object ID` == 3 ~ "No Contractual Services",
+                                               is.na(`Changes or adjustments`) & `Object ID` == 4 ~ "No Materials and Supplies",
+                                               is.na(`Changes or adjustments`) & `Object ID` == 5 ~ "No Equipment < $5K",
+                                               is.na(`Changes or adjustments`) & `Object ID` == 6 ~ "No Equipment > $5K",
+                                               is.na(`Changes or adjustments`) & `Object ID` == 7 ~ "No Grants, Subsidies or Contributions",
+                                               is.na(`Changes or adjustments`) & `Object ID` == 8 ~ "No Debt Service",
+                                               is.na(`Changes or adjustments`) & `Object ID` == 9 ~ "No Capital Improvements",
+                                               TRUE ~ `Changes or adjustments`)) %>%
+  ungroup() %>%
+  rename(`Automated Notes` = `Position Note`) %>%
+  select(`Service ID`, `Object ID`, `Changes or adjustments`, `Amount`, `Automated Notes`, `Analyst Notes`)
+
+
+#add agency back in for filtering
+ag_svc <- change_tables$gen_fund %>% select(`Agency Name`, `Service ID`) %>% unique()
+change_tables$agency <- change_tables$df %>% left_join(ag_svc, by = "Service ID") 
+
+change_tables$agency$`Object ID`[change_tables$agency$`Object ID` == 1] <- "1, 2"
+
+##testing only!! add random strings to Analyst Notes to test carry forward process
+# change_tables$agency$`Analyst Notes` <- random::randomStrings(n = dim(change_tables$agency)[1], len = 10, digits = FALSE)
+
+##add analyst notes from previous file!!
+# test <- left_join(change_tables$agency, df_notes, by = c("Service ID", "Object ID", "Agency Name")) %>%
+#   rename("Analyst Notes" = "Analyst Notes.y", "Changes or adjustments" = "Changes or adjustments.x", "Amount" = "Amount.x", "Automated Notes" = "Automated Notes.x") %>%
+#   select(`Agency Name`, `Service ID`, `Object ID`, `Changes or adjustments`, `Amount`, `Automated Notes`, `Analyst Notes`)
+
+##remove duplicates! from blank Object ID joins -OR- tell analysts not to enter notes there.
+
+##make folders and file paths=================
+
+file_info <- list(
+  analysts = import("G:/Analyst Folders/Sara Brumfield/_ref/Analyst Assignments.xlsx") %>%
+    filter(!is.na(Analyst) & `Operational` == "TRUE") %>%
+    mutate(#`Agency ID` = as.character(`Agency ID`),
+      `File Start` = paste0("outputs/", `Agency Name - Cleaned`)),
+  agencies = import("G:/Analyst Folders/Sara Brumfield/_ref/Analyst Assignments.xlsx") %>%
+    filter(`Operational` == "TRUE") %>%
+    select(`Agency Name`),
+  short = import("G:/Analyst Folders/Sara Brumfield/_ref/Analyst Assignments.xlsx") %>%
+    filter(`Operational` == "TRUE") %>%
+    select(`Agency Name`, `Agency Short`)
+)
+
+# create_analyst_dirs <- function(path, additional_folders = NULL) {
+#   
+#   if (missing(path)) {
+#     path <- getwd()
+#   }
+#   
+#   # analysts <- unique(file_info$analysts$Analyst)
+#   file_path <- file_info$analysts$`File Start`
+#   
+#   if (stringr::str_trunc(path, 1, side = "left", ellipsis = "") == "/") {
+#     dirs <- paste0(path, file_path)
+#   } else {
+#     dirs <- paste0(path, "/", file_path)
+#   }
+#   
+#   dirs %>%
+#     sapply(dir.create, recursive = TRUE)
+# }
+# 
+# create_analyst_dirs()
+
+agencies <- file_info$agencies$`Agency Name` %>% unique()
+
+##export services by agency and analyst=========
+export_change_table_file <- function(agency, change_table_df) {
+  
+  file_name <- paste0("outputs/Change Table_", 
+                      file_info$short$`Agency Short`[file_info$short$`Agency Name` == agency], 
+                      "_FY", 
+                      params$start_yr, params$start_phase, 
+                      "-FY", params$end_yr, params$end_phase, "_", Sys.Date(), ".xlsx")
+  
+  agency <- gsub("&", "and", agency)
+  
+  output <- change_table_df %>% filter(`Agency Name` == agency) %>% arrange(`Service ID`)
+  
+  svcs <- output %>%
+    group_by(`Service ID`) %>%
+    # remove any services without a budget in current AND target FY
+    filter(any(Amount != 0)) %>%
+    ungroup() %>%
+    extract2("Service ID") %>%
+    unique() %>%
+    sort()
+  
+  #Excel
+  if (nrow(output) > 0) {
+    n = 1
+    for (i in svcs) {
+      
+      df <- output %>% 
+        filter(`Service ID` == i)
+      
+      excel <- suppressMessages(
+        export_excel(df = df, tab_name = i, file_name = file_name,
+                     save = FALSE,
+                     type = ifelse(i == svcs[1], "new", "existing")))
+      
+      ##style elements
+      # mergeCells(excel, n, cols = 5, rows = 2:12)
+      style <- createStyle(wrapText = TRUE)
+      addStyle(excel, sheet = n, style, cols = 5:6, rows = 2:12, gridExpand = TRUE)
+      setColWidths(excel, n, 5, widths = 45, hidden = FALSE)
+      # writeFormula(excel, n, x = "CHAR(10)", startCol = 5, startRow = 2)
+      #freeze notes cells next to budget lines
+      
+      openxlsx::saveWorkbook(excel, file_name, overwrite = TRUE)
+      n = n + 1
+      # cat(".") # progress bar of sorts
+      
+      cat("Change table file saved as", file_name, "\n")}
+  }}
+
+map(agencies, export_change_table_file, change_tables$agency)
+
+
+##export full data ===========================================
+export_excel(change_tables$agency, "By Agency", paste0(getwd(),"/outputs/FY", params$start_yr, " ", params$start_phase, " - FY", params$end_yr, " ", params$end_phase, " OSO Changes.xlsx"), type = "new")

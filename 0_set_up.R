@@ -9,9 +9,9 @@ params <- list(
   # most up-to-date line item and position files for planning year
   # verify with William for most current version
   line.start = "G:/Fiscal Years/Fiscal 2023/Projections Year/1. July 1 Prepwork/Appropriation File/Fiscal 2023 Appropriation File_Change_Tables.xlsx",
-  line.end = "G:/Fiscal Years/Fiscal 2024/Planning Year/1. CLS/1. Line Item Reports/line_items_2022-08-18_CLS_Master.xlsx",
+  line.end = "G:/Fiscal Years/Fiscal 2024/Planning Year/1. CLS/1. Line Item Reports/line_items_2022-11-2_CLS FINAL AFTER BPFS.xlsx",
   position.start = "G:/Fiscal Years/Fiscal 2023/Projections Year/1. July 1 Prepwork/Positions/Fiscal 2023 Appropriation File_Change_Tables.xlsx",
-  position.end = "G:/Fiscal Years/Fiscal 2024/Planning Year/1. CLS/2. Position Reports/PositionsSalariesOpcs_2022-08_19_CLS_WorkdayPositionUpdate.xlsx",
+  position.end = "G:/Fiscal Years/Fiscal 2024/Planning Year/1. CLS/2. Position Reports/PositionsSalariesOpcs_2022-11-2b_CLS FINAL AFTER BPFS.xlsx",
   # leave revenue file blank if not yet available; script will then just pull in last FY's data
   revenue = "G:/BBMR - Revenue Team/1. Fiscal Years/Fiscal 2023/Planning Year/Budget Publication/FY 2023 - Budget Publication - Prelim.xlsx"
 )
@@ -54,7 +54,7 @@ library(random)
 library(stringr)
 library(stringi)
 
-devtools::load_all("G:/Analyst Folders/Sara Brumfield/bbmR")
+devtools::load_all("G:/Analyst Folders/Sara Brumfield/_packages/bbmR")
 source("G:/Budget Publications/automation/0_data_prep/bookDataPrep/R/change_table.R")
 source("G:/Budget Publications/automation/0_data_prep/bookDataPrep/R/export.R")
 source("G:/Budget Publications/automation/0_data_prep/bookDataPrep/R/import.R")
@@ -75,54 +75,4 @@ services <- c(services, "833", "619", "168") # add Innovation Fund
 
 # set number formatting for openxlsx
 options("openxlsx.numFmt" = "#,##0;(#,##0)")
-
-# check_name_changes("service")
-# 
-# internal <- list(
-#   output_file_start = paste0("outputs/fy", params$fy,
-#                              "_", tolower(params$phase), "/"),
-#   std_oso_salary = c("101", "103", "161", "162", "182"),
-#   std_oso_opcs = c("201", "231", "233"),
-#   std_oso = c("000", "101", "103", "161", "162", "182",
-#               "201", "202", "203", "205", "207", "210", "212", "213", 
-#               "231", "233", "235", "242", "268", 
-#               "272", "273", "274", "276", "277", "282", "285", "287", 
-#               "331", "335", "396", "401", "740")
-#   std_changes = c("employee compensation and benefits","contractual services expenses",
-#                   "operating supplies, equipment, software, and computer hardware", 
-#                   "grants, contributions, and subsidies",
-#                   "all other"),
-#   new_services = c("833", "619", "168"), # Innovation Fund
-#   no_one_pagers = c("129",	# Conditional Purchase Agreement Payments
-#                     "121",	# Contingent Fund
-#                     "123",  # General Debt Service
-#                     "122",	# Miscellaneous General Expenses
-#                     "124",	# TIF Debt Service
-#                     "355",	# Employees' Retirement Contribution
-#                     "126",	# Contribution to Self-Insurance Fund
-#                     "535",	# Convention Center Hotel
-#                     "351",  # Retirees' Benefits 
-#                     "878",  # Disabilities Commission (rolled up with Wage Enforcement)
-#                     "833",  # Innovation Fund, special agency detail page
-#                     "352")) # BCPSS, special agency detail page
-
-##set paths func ==================
-# set_paths <- function (path_base = paste0(getwd()), 
-#                    path_data = paste0(getwd(), "/outputs/", params$start_phase, "_", 
-#                                       params$end_phase, "_", Sys.Date(), "/")) 
-# {
-#   paths <- list(data = path_data)
-#   dir.create(paths$data)
-#   paths <- as.list(paste0(list.dirs(paste0(path_base), recursive = FALSE), 
-#                                            "/")) %>% magrittr::set_names(list.dirs(paste0(path_base), recursive = FALSE, 
-#                                                                                    full.names = FALSE))
-# 
-#   saveRDS(paths, paste0(paths$data, "paths.Rds"))
-# 
-#   return(paths)
-# }
-# 
-# paths <- set_paths()
-
-
 
