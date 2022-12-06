@@ -4,10 +4,20 @@ library(magrittr)
 library(rio)
 library(openxlsx)
 library(readxl)
+library(janitor)
 
 devtools::load_all("G:/Analyst Folders/Sara Brumfield/_packages/bbmR")
+source("G:/Budget Publications/automation/2_agency_detail/bookAgencyDetail/R/0_import_functions.R")
+source("G:/Budget Publications/automation/2_agency_detail/bookAgencyDetail/R/0_latex_functions.R")
+source("G:/Budget Publications/automation/2_agency_detail/bookAgencyDetail/R/0_setup_functions.R")
+source("G:/Budget Publications/automation/2_agency_detail/bookAgencyDetail/R/1a_agency_summary.R")
+source("G:/Budget Publications/automation/2_agency_detail/bookAgencyDetail/R/1b_service_budget_tables.R")
+source("G:/Budget Publications/automation/2_agency_detail/bookAgencyDetail/R/1b_service_detail_functions.R")
+source("G:/Budget Publications/automation/2_agency_detail/bookAgencyDetail/R/1b_service_one_pagers.R")
 
 params = list(fy = 24)
+
+options("openxlsx.numFmt" = "#,##0")
 
 #data from 0_data_prep ====
 analysts <- import("G:/Analyst Folders/Sara Brumfield/_ref/Analyst Assignments.xlsx") %>%
@@ -87,6 +97,8 @@ summary <- line_item %>%
 
 agencies = analysts$`Agency Name`
 
+##agency summary tables from 2_agency_detail ===========
+
 ##make and export templates for each service ======
 
 make_template <- function(
@@ -117,20 +129,23 @@ make_template <- function(
   
   data <- df %>%
     ungroup() %>%
-    select(Type, Fund, `FY22 Actual`:`FY24 Request`)
+    select(Type, Fund, `FY22 Actual`:`FY24 Request`) %>%
+    mutate(`FY24 TLS` = 0)
   
   tech_adjust <- data.frame(Item = "Enter item here",
                             Object = "",
                             Subobject = "",
-                            Amount = "")
+                            Amount = "",
+                            Decision = "Approved or not approved")
   
   savings_ideas <- data.frame(Item = "Enter item here",
                             Object = "",
                             Subobject = "",
-                            Amount = "")
+                            Amount = "",
+                            Decision = "Approved or not approved")
   
-  change_table <- data.frame(`Change Table` = c("FY2023 Adopted", "CLS Adjustments", "", "", "", "Request Adjustments", "", "", "", "FY2024 Request"),
-                              Amount = c(sum(data$`FY23 Adopted`[data$Type=="Expenditures"], na.rm = TRUE), sum(data$`FY24 CLS`[data$Type=="Expenditures"], na.rm = TRUE), "", "", "", "", "", "", "", sum(data$`FY24 Request`[data$Type=="Expenditures"], na.rm = TRUE)))
+  change_table <- data.frame(`Change Table` = c("FY2023 Adopted", "CLS Adjustments", "", "", "Request Adjustments", "", "", "TLS Adjustments", "", "", "FinRec Adjustments", "", "", "BoE Adjustments", "", "", "Council Adjustments", "", "", "FY2024 Budget"),
+                              Amount = c(sum(data$`FY23 Adopted`[data$Type=="Expenditures"], na.rm = TRUE), sum(data$`FY24 CLS`[data$Type=="Expenditures"], na.rm = TRUE), "", "", sum(data$`FY24 Request`[data$Type=="Expenditures"], na.rm = TRUE), "", "", sum(data$`FY24 TLS`[data$Type=="Expenditures"], na.rm = TRUE), "", "", "Pending", "", "", "Pending", "", "", "Pending", "", "", "Pending"))
   
   excel <- switch(type,
                   "new" = openxlsx::createWorkbook(),
@@ -198,6 +213,55 @@ make_template <- function(
   }
 }
 
+make_agency_summary <- function(agency, file_name) {
+  tab_name = "Agency Summary"
+  
+  summary_dollars <- summary %>%
+    ungroup() %>%
+    filter(`Agency Name` == agency & Type == "Expenditures") %>%
+    unite("Service", c(`Service ID`, `Service Name`), sep = ": ") %>%
+    select(-Fund, -`Objective Name`, -`Agency Name`, -Type) %>%
+    arrange(Service) %>%
+    adorn_totals() %>%
+    mutate(`FY24 TLS` = "TBD")
+  
+  summary_positions <- summary %>%
+    ungroup() %>%
+    filter(`Agency Name` == agency & Type == "Positions") %>%
+    unite("Service", c(`Service ID`, `Service Name`), sep = ": ") %>%
+    select(-Fund, -`Objective Name`, -`Agency Name`, -Type) %>%
+    arrange(Service) %>%
+    adorn_totals() %>%
+    mutate(`FY24 TLS` = "TBD")
+  
+  agency_sheet <- openxlsx::loadWorkbook(file_name) %T>%
+    openxlsx::addWorksheet(
+      tab_name,
+      header = c(gsub('\\..*', '', file_name), "&[Tab]", as.character(Sys.Date())),
+      footer = c(NA, "&[Page]", NA)) %T>%
+    openxlsx::writeData(tab_name, x = "Dollars by Service", startCol = 1, startRow = 1) %T>%
+    openxlsx::addStyle(tab_name, createStyle(fontSize = 14, textDecoration = "bold", border = "bottom", borderStyle = "thin"), rows = 1, cols = 1) %T>%
+    openxlsx::writeDataTable(
+      tab_name, summary_dollars, xy = c(1, 2),
+      tableStyle = "none", headerStyle =
+        createStyle(fontSize = 12, textDecoration = "bold", border = "bottom", borderStyle = "thin"),
+      tableName = paste0("DollarsbyService")) %T>%
+    openxlsx::writeData(tab_name, x = "Positions by Service", startCol = 1, startRow = dim(summary_dollars)[1]+3) %T>%
+    openxlsx::addStyle(tab_name, createStyle(fontSize = 14, textDecoration = "bold", border = "bottom", borderStyle = "thin"), rows = dim(summary_dollars)[1]+3, cols = 1) %T>%
+    openxlsx::writeDataTable(
+      tab_name, summary_positions, xy = c(1, dim(summary_dollars)[1]+4),
+      tableStyle = "none", headerStyle =
+        createStyle(fontSize = 12, textDecoration = "bold", border = "bottom", borderStyle = "thin"),
+      tableName = paste0("PositionsbyService")) %T>%
+    openxlsx::writeData(tab_name, x = "Agency Budget Highlights", startCol = dim(summary_dollars)[2]+2, startRow = 1) %T>%
+    openxlsx::addStyle(tab_name, createStyle(fontSize = 14, textDecoration = "bold", border = "bottom", borderStyle = "thin"), rows = 1, cols = dim(summary_dollars)[2]+2) %T>%
+    openxlsx::writeData(tab_name, x = "Add text here", startCol = dim(summary_dollars)[2]+2, startRow = 2) %T>%
+    openxlsx::setColWidths(tab_name, dim(summary_dollars)[2]+2, widths = 45) %T>%
+    openxlsx::setColWidths(tab_name, 1, widths = 45)
+
+  openxlsx::saveWorkbook(agency_sheet, file_name, overwrite = TRUE)
+  base::message(tab_name, ' tab created in the file saved as ', file_name)
+}
 
 export_template <- function(agency, data) {
   
@@ -243,9 +307,12 @@ export_template <- function(agency, data) {
       n = n + 1
       # cat(".") # progress bar of sorts
       
-      cat("Change table file saved as", file_name, "\n")}
+      cat("Change table sheet saved in", file_name, "\n")}
+    
+    make_agency_summary(agency, file_name)
   }}
 
-# export_template(agencies, summary)
+##testing
+export_template("Human Resources", summary)
 
 map(agencies, export_template, summary)
