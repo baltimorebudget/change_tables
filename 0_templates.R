@@ -195,8 +195,8 @@ make_template <- function(
       tableName = paste0("SavingsIdeas", svc_id)) %T>%
     openxlsx::setColWidths(tab_name, 1, widths = 45) %T>%
     openxlsx::setColWidths(tab_name, 2, widths = 30) %T>%
-    openxlsx::setColWidths(tab_name, 3:6, widths = 15) %T>%
-    openxlsx::setColWidths(tab_name, 7, widths = 5) %T>%
+    openxlsx::setColWidths(tab_name, 3:7, widths = 15) %T>%
+    # openxlsx::setColWidths(tab_name, 7, widths = 5) %T>%
     openxlsx::setColWidths(tab_name, 8, widths = 40) %T>%
     openxlsx::setColWidths(tab_name, 9, widths = 15) %T>%
     openxlsx::setColWidths(tab_name, 10, widths = 45) %T>%
