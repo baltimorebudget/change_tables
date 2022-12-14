@@ -85,23 +85,27 @@ summary <- line_item %>%
   rbind(positions) %>%
 # summary <- line_item %>%
 #   left_join(positions) %>%
-  mutate(`Fund` = case_when(`Fund Name` == "General" ~ "General Fund",
-                            TRUE ~ "All Other Funds")) %>%
-  relocate(Fund, .after = `Fund Name`) %>%
-  select(-`Fund Name`) %>%
+  # mutate(`Fund` = case_when(`Fund Name` == "General" ~ "General Fund",
+  #                           TRUE ~ "All Other Funds")) %>%
+  # relocate(Fund, .after = `Fund Name`) %>%
+  # select(-`Fund Name`) %>%
   mutate_if(is.numeric, replace_na, 0) %>%
 #   select(`Agency Name`:`Fund`, sort(names(.))) %>%
 #   select(-`FY24 Prop`) %>%
 #   relocate(`FY24 Positions - CLS`, .after = !!cols$dollars_cls) %>%
 #   filter(!!sym(cols$dollars_prop) != 0) %>%
-  group_by(`Agency Name`, `Service Name`, `Service ID`, Fund, Type, `Objective Name`) %>%
+  group_by(`Agency Name`, `Service Name`, `Service ID`, Type, `Fund Name`, `Objective Name`) %>%
   summarise_if(is.numeric, sum, na.rm = TRUE)
+
+## to space tables and analysis box
+check <- summary %>% group_by(`Agency Name`, `Service ID`) %>% summarise(count = n())
 
 ##OSO changes
 osos <- readRDS(paste0(path$prop, "expenditure.Rds")) %>%
   select(`Agency Name`:`Service Name`, `Fund ID`:`Fund Name`, `Subobject ID`, `Subobject Name`, `FY24 CLS`:`FY24 Budget`) %>%
-  mutate(`Fund` = case_when(`Fund Name` == "General" ~ "General Fund",
-                            TRUE ~ "All Other Funds"),
+  mutate(
+    # `Fund` = case_when(`Fund Name` == "General" ~ "General Fund",
+    #                         TRUE ~ "All Other Funds"),
          `OSO` = case_when(`Subobject ID` %in% c("101", "161", "162") ~ "Permanent Wages Adjustment",
                            `Subobject ID` %in% c("204", "245", "788", "202", "203", "279") ~ "Pension Adjustment",
                            `Subobject ID` %in% c("207", "85", "285", "368", "766") ~ "Healthcare Adjustment",
@@ -109,9 +113,9 @@ osos <- readRDS(paste0(path$prop, "expenditure.Rds")) %>%
                            `Subobject ID` %in% c("352", "311", "313", "316", "336", "380") ~ "Building Maintenance and Rental Charge Adjustment",
                            TRUE ~ "Other"),
          Diff = `FY24 Budget` - `FY24 CLS`) %>%
-  relocate(Fund, .after = `Fund Name`) %>%
-  select(-`Fund Name`, -`Fund ID`, -`Subobject ID`, -`Subobject Name`) %>%
-  group_by(`Agency Name`, `Service ID`, `Service Name`, Fund, OSO) %>%
+  # relocate(Fund, .after = `Fund Name`) %>%
+  # select(-`Fund Name`, -`Fund ID`, -`Subobject ID`, -`Subobject Name`) %>%
+  group_by(`Agency Name`, `Service ID`, `Service Name`, `Fund Name`, OSO) %>%
   summarise_if(is.numeric, sum, na.rm = TRUE) %>%
   filter(Diff != 0)
 
@@ -122,7 +126,7 @@ agencies = analysts$`Agency Name`
 ##make and export templates for each service ======
 
 make_template <- function(
-    df, oso, tab_name, file_name, type = "new", col_width = 'auto',
+    df, oso, svc, tab_name, file_name, type = "new", col_width = 'auto',
     tab_color = NULL, table_name = NULL, show_tab = TRUE, save = TRUE) {
   
   if (missing(df) | missing(tab_name) | missing(file_name)) {
@@ -149,12 +153,12 @@ make_template <- function(
   
   data <- df %>%
     ungroup() %>%
-    select(Type, Fund, `FY22 Actual`:`FY24 Request`) %>%
+    select(Type, `Fund Name`, `FY22 Actual`:`FY24 Request`) %>%
     mutate(`FY24 TLS` = 0,
            `Change $` = `FY24 Request` - `FY24 CLS`) %>%
     rowwise() %>%
     mutate(`Change %` = ifelse(is.numeric(round(((`FY24 Request` - `FY24 CLS`)/`FY24 CLS`) * 100, 1)), (round(((`FY24 Request` - `FY24 CLS`)/`FY24 CLS`) * 100, 1)), 0)) %>%
-    arrange(Type, match(Fund, c("General Fund", "All Other Funds")))
+    arrange(Type, match(`Fund Name`, c("General", "Internal Service", "Federal", "State", "Special Grant", "Special Revenue", "Parking Management", "Conduit Enterprise", "Stormwater Utility", "Wastewater Utility", "Convention Center Bond", "Loan and Guarantee Enterprise", "Motor Vehicle", NA)))
   
   tech_adjust <- data.frame(Item = c("Enter item here", "", "", "", "Total"),
                             Object = c(rep("", 5)),
@@ -168,7 +172,7 @@ make_template <- function(
                               Amount = c(rep("", 5)),
                               Decision = c(rep("", 5)))
   
-  change_table <- data.frame(`Change Table` = c("FY2023 Adopted", 
+  change_table <- data.frame(Adjustments = c("FY2023 Adopted", 
                                                 "CLS Adjustments", 
                                                 "Permanent Wages Adjustment", 
                                                 "Updated Pension costs based on projected rate", 
@@ -176,6 +180,7 @@ make_template <- function(
                                                 "All other benefit updates", 
                                                 "Updated Fleet rate", 
                                                 "Updated Building/Maintenance/Rental Charges", 
+                                                "All other updates",
                                                 "Build-ins/Build-outs (please list)", 
                                                 "", 
                                                 "Request Adjustments", 
@@ -194,20 +199,21 @@ make_template <- function(
                                                 "", 
                                                 "", 
                                                 "FY2024 Budget"),
-                              Amount = c(sum(data$`FY23 Adopted`[data$Type=="Expenditures" & data$Fund == "General Fund"], na.rm = TRUE), 
-                                         sum(data$`FY24 CLS`[data$Type=="Expenditures" & data$Fund == "General Fund"], na.rm = TRUE), 
-                                         sum(oso$`Diff`[oso$OSO=="Permanent Wages Adjustment" & oso$Fund == "General Fund"], na.rm = TRUE), 
-                                         sum(oso$`Diff`[oso$OSO=="Pension Adjustment" & oso$Fund == "General Fund"], na.rm = TRUE), 
-                                         sum(oso$`Diff`[oso$OSO=="Healthcare Adjustment" & oso$Fund == "General Fund"], na.rm = TRUE), 
-                                         sum(oso$`Diff`[oso$OSO=="Fleet Adjustment" & oso$Fund == "General Fund"], na.rm = TRUE), 
-                                         sum(oso$`Diff`[oso$OSO=="Building Maintenance and Rental Charge Adjustment" & oso$Fund == "General Fund"], na.rm = TRUE), 
-                                         "", 
+                              Amount = c(sum(data$`FY23 Adopted`[data$Type=="Expenditures" & data$`Fund Name` == "General"], na.rm = TRUE), 
+                                         sum(data$`FY24 CLS`[data$Type=="Expenditures" & data$`Fund Name` == "General"], na.rm = TRUE), 
+                                         sum(oso$`Diff`[oso$OSO=="Permanent Wages Adjustment" & oso$`Fund Name` == "General"], na.rm = TRUE), 
+                                         sum(oso$`Diff`[oso$OSO=="Pension Adjustment" & oso$`Fund Name` == "General"], na.rm = TRUE), 
+                                         sum(oso$`Diff`[oso$OSO=="Healthcare Adjustment" & oso$`Fund Name` == "General"], na.rm = TRUE), 
+                                         "",
+                                         sum(oso$`Diff`[oso$OSO=="Fleet Adjustment" & oso$`Fund Name` == "General"], na.rm = TRUE), 
+                                         sum(oso$`Diff`[oso$OSO=="Building Maintenance and Rental Charge Adjustment" & oso$`Fund Name` == "General"], na.rm = TRUE), 
+                                         sum(oso$`Diff`[oso$OSO=="Other" & oso$`Fund Name` == "General"], na.rm = TRUE),
                                          "", 
                                          "",
-                                         sum(data$`FY24 Request`[data$Type=="Expenditures" & data$Fund == "General Fund"], na.rm = TRUE), 
+                                         sum(data$`FY24 Request`[data$Type=="Expenditures" & data$`Fund Name` == "General"], na.rm = TRUE), 
                                          "", 
                                          "", 
-                                         sum(data$`FY24 TLS`[data$Type=="Expenditures" & data$Fund == "General Fund"], na.rm = TRUE), 
+                                         sum(data$`FY24 TLS`[data$Type=="Expenditures" & data$`Fund Name` == "General"], na.rm = TRUE), 
                                          "", 
                                          "", 
                                          "Pending", 
@@ -220,7 +226,7 @@ make_template <- function(
                                          "", 
                                          "", 
                                          "Pending"),
-                             `Tollgate Decision` = rep("TBD", 26))
+                             `Tollgate Decision` = rep("", 27))
   
   excel <- switch(type,
                   "new" = openxlsx::createWorkbook(),
@@ -250,25 +256,29 @@ make_template <- function(
     openxlsx::writeDataTable(
       tab_name, data, xy = c(1, 9), tableStyle = "TableStyleLight8",
       tableName = paste0("BudgetData", svc_id)) %T>%
+    openxlsx::writeData(tab_name, x = "Change Table (GF Only)", startCol = 11, startRow = 1) %T>%
+    openxlsx::addStyle(tab_name, createStyle(fontSize = 14, textDecoration = "bold", border = "bottom", borderStyle = "thin"), rows = 1, cols = 11) %T>%
     openxlsx::writeDataTable(
       tab_name, change_table, xy = c(11, 2),
       tableStyle = "TableStyleLight8", 
       # headerStyle = createStyle(fontSize = 12, textDecoration = "bold", border = "bottom", borderStyle = "thin"),
       tableName = paste0("ChangeTable", svc_id)) %T>%
-    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#D9D9D9"), rows = c(3), cols = c(11:12)) %T>%
-    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#D9D9D9"), rows = c(4), cols = c(11:12)) %T>%
-    openxlsx::addStyle(tab_name, createStyle(indent = 5), rows = c(5,6,7,8,9,10, 11), cols = c(11)) %T>%
-    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#D9D9D9"), rows = c(13), cols = c(11:12)) %T>%
-    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#D9D9D9"), rows = c(16), cols = c(11:12)) %T>%
-    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#D9D9D9"), rows = c(19), cols = c(11:12)) %T>%
-    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#D9D9D9"), rows = c(22), cols = c(11:12)) %T>%
-    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#D9D9D9"), rows = c(25), cols = c(11:12)) %T>%
-    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#D9D9D9"), rows = c(28), cols = c(11:12)) %T>%
-    openxlsx::writeData(tab_name, x = "Analysis", startCol = 1, startRow = 17) %T>%
-    openxlsx::addStyle(tab_name, createStyle(fontSize = 12, textDecoration = "bold", border = c("bottom"), borderStyle = "thin"), rows = 17, cols = 1) %T>%
-    openxlsx::mergeCells(tab_name, cols = 1:9, rows = 18:24) %T>%
-    openxlsx::addStyle(tab_name, createStyle(border = c("bottom", "top", "left", "right"), borderStyle = "thin"), rows = 18, cols = 1) %T>%
+    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#D9D9D9"), rows = c(3), cols = c(11:13)) %T>%
+    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#D9D9D9"), rows = c(4), cols = c(11:13)) %T>%
+    openxlsx::addStyle(tab_name, createStyle(indent = 5), rows = c(5,6,7,8,9,10, 11,12), cols = c(11)) %T>%
+    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#D9D9D9"), rows = c(14), cols = c(11:13)) %T>%
+    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#D9D9D9"), rows = c(17), cols = c(11:13)) %T>%
+    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#D9D9D9"), rows = c(20), cols = c(11:13)) %T>%
+    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#D9D9D9"), rows = c(23), cols = c(11:13)) %T>%
+    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#D9D9D9"), rows = c(26), cols = c(11:13)) %T>%
+    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#D9D9D9"), rows = c(29), cols = c(11:13)) %T>%
+    openxlsx::writeData(tab_name, x = "Analysis", startCol = 1, startRow = 22) %T>%
+    openxlsx::addStyle(tab_name, createStyle(fontSize = 12, textDecoration = "bold", border = c("bottom"), borderStyle = "thin"), rows = 22, cols = 1:9) %T>%
+    openxlsx::mergeCells(tab_name, cols = 1:9, rows = 23:28) %T>%
+    # openxlsx::addStyle(tab_name, createStyle(border = c("bottom", "top", "left", "right"), borderStyle = "thin"), rows = 23:28, cols = 1:9) %T>%
     # openxlsx::writeData(tab_name, x = "Describe major changes, 1 per row", startCol = 1, startRow = 14+dim(data)[1], borders = "surround") %T>%
+    openxlsx::writeData(tab_name, x = "Tollgate Recommendations", startCol = 15, startRow = 1) %T>%
+    openxlsx::addStyle(tab_name, createStyle(fontSize = 14, textDecoration = "bold", border = "bottom", borderStyle = "thin"), rows = 1, cols = 15) %T>%
     openxlsx::writeData(tab_name, x = "Technical Adjustments", startCol = 15, startRow = 2) %T>%
     openxlsx::addStyle(tab_name, createStyle(fontSize = 12, textDecoration = "bold"), rows = 2, cols = 15) %T>%
     openxlsx::writeDataTable(
@@ -310,7 +320,7 @@ make_agency_summary <- function(agency, file_name) {
     ungroup() %>%
     filter(`Agency Name` == agency & Type == "Expenditures") %>%
     unite("Service", c(`Service ID`, `Service Name`), sep = ": ") %>%
-    select(-Fund, -`Objective Name`, -`Agency Name`, -Type) %>%
+    select(-`Fund Name`, -`Objective Name`, -`Agency Name`, -Type) %>%
     arrange(Service) %>%
     adorn_totals() %>%
     mutate(`FY24 TLS` = "TBD")
@@ -319,7 +329,7 @@ make_agency_summary <- function(agency, file_name) {
     ungroup() %>%
     filter(`Agency Name` == agency & Type == "Positions") %>%
     unite("Service", c(`Service ID`, `Service Name`), sep = ": ") %>%
-    select(-Fund, -`Objective Name`, -`Agency Name`, -Type) %>%
+    select(-`Fund Name`, -`Objective Name`, -`Agency Name`, -Type) %>%
     arrange(Service) %>%
     adorn_totals() %>%
     mutate(`FY24 TLS` = "TBD")
@@ -384,7 +394,7 @@ export_template <- function(agency, data) {
         filter(`Service ID` == i)
 
         excel <- suppressMessages(
-          make_template(df = df, oso = oso, tab_name = i, file_name = file_name,
+          make_template(df = df, oso = oso, svc = i, tab_name = i, file_name = file_name,
                        save = FALSE,
                        type = ifelse(i == svcs[1], "new", "existing")))
         
@@ -408,6 +418,6 @@ export_template <- function(agency, data) {
   }}
 
 ##testing
-export_template("Enoch Pratt Free Library", summary)
+export_template("M-R: Office of Children and Family Success", summary)
 
 map(agencies, export_template, summary)
