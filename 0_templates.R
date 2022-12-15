@@ -143,7 +143,8 @@ make_template <- function(
   Sys.setenv("R_ZIPCMD" = "C:/Rtools/bin/zip.exe") # corrects Rtools in wrong env error
   
   options("openxlsx.orientation" = "landscape",
-          "openxlsx.datetimeFormat" = "yyyy-mm-dd")
+          "openxlsx.datetimeFormat" = "yyyy-mm-dd",
+          "openxlsx.numFmt" = "#,##0;-#,##0;--")
   
   
   agency <- unique(df$`Agency Name`)
@@ -159,6 +160,14 @@ make_template <- function(
     rowwise() %>%
     mutate(`Change %` = ifelse(is.numeric(round(((`FY24 Request` - `FY24 CLS`)/`FY24 CLS`) * 100, 1)), (round(((`FY24 Request` - `FY24 CLS`)/`FY24 CLS`) * 100, 1)), 0)) %>%
     arrange(Type, match(`Fund Name`, c("General", "Internal Service", "Federal", "State", "Special Grant", "Special Revenue", "Parking Management", "Conduit Enterprise", "Stormwater Utility", "Wastewater Utility", "Convention Center Bond", "Loan and Guarantee Enterprise", "Motor Vehicle", NA)))
+  
+  dollar_data <- data %>%
+    filter(Type == "Expenditures") %>%
+    select(-Type)
+
+  position_data <- data %>%
+    filter(Type == "Positions") %>%
+    select(-Type)
   
   tech_adjust <- data.frame(Item = c("Enter item here", "", "", "", "Total"),
                             Object = c(rep("", 5)),
@@ -235,6 +244,7 @@ make_template <- function(
       tab_name, tabColour = tab_color,
       header = c(gsub('\\..*', '', file_name), "&[Tab]", as.character(Sys.Date())),
       footer = c(NA, "&[Page]", NA), visible = show_tab) %T>%
+    ##heading info
     openxlsx::writeData(tab_name, x = "Service Summary", startCol = 1, startRow = 1) %T>%
     openxlsx::addStyle(tab_name, createStyle(fontSize = 14, textDecoration = "bold", border = "bottom", borderStyle = "thin"), rows = 1, cols = 1) %T>%
     openxlsx::writeData(tab_name, x = "Agency", startCol = 1, startRow = 2) %T>%
@@ -245,61 +255,73 @@ make_template <- function(
     openxlsx::writeData(tab_name, x = svc_name, startCol = 2, startRow = 3) %T>%
     openxlsx::writeData(tab_name, x = svc_id, startCol = 2, startRow = 4) %T>%
     openxlsx::writeData(tab_name, x = pillar, startCol = 2, startRow = 5) %T>%
-    openxlsx::writeData(tab_name, x = "Budget Summary", startCol = 1, startRow = 8) %T>%
-    openxlsx::addStyle(tab_name, createStyle(fontSize = 12, textDecoration = "bold"), rows = 8, cols = 1) %T>%
+    ##budget summary headers
+    openxlsx::writeData(tab_name, x = "Budget Summary", startCol = 1, startRow = 7) %T>%
+    openxlsx::addStyle(tab_name, createStyle(fontSize = 12), rows = 7, cols = 1) %T>%
     openxlsx::writeData(tab_name, x = "Budget Amounts", startCol = 3, startRow = 8) %T>%
     openxlsx::mergeCells(tab_name, cols = 3:7, rows = 8) %T>%
-    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fontSize = 12, halign = "center", fgFill = "#D9D9D9", border = c("left","right")), rows = 8, cols = 3) %T>%
+    openxlsx::addStyle(tab_name, createStyle(fontSize = 12, halign = "center", border = c("left","right", "top")), rows = 8, cols = 3) %T>%
     openxlsx::writeData(tab_name, x = "Change Amounts", startCol = 8, startRow = 8) %T>%
     openxlsx::mergeCells(tab_name, cols = 8:9, rows = 8) %T>%
-    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fontSize = 12, halign = "center", fgFill = "#D9D9D9", border = c("left", "right")), rows = 8, cols = 8) %T>%
+    openxlsx::addStyle(tab_name, createStyle(fontSize = 12, halign = "center", border = c("left", "right", "top")), rows = 8, cols = 8) %T>%
+    ##budget dollars summary data table
+    openxlsx::writeData(tab_name, x = "Budget by Fund", startCol = 1, startRow = 10) %T>%
     openxlsx::writeDataTable(
-      tab_name, data, xy = c(1, 9), tableStyle = "TableStyleLight8",
-      tableName = paste0("BudgetData", svc_id)) %T>%
+      tab_name, dollar_data, xy = c(2, 9), tableStyle = "TableStyleLight8",
+      tableName = paste0("DollarData", svc_id)) %T>%
+    ##budget position summary data table
+    openxlsx::writeData(tab_name, x = "Positions by Fund", startCol = 1, startRow = dim(dollar_data)[1]+11) %T>%
+    openxlsx::writeDataTable(
+      tab_name, position_data, xy = c(2, dim(dollar_data)[1]+10), tableStyle = "TableStyleLight8",
+      tableName = paste0("PositionData", svc_id)) %T>%
+    ##change table
     openxlsx::writeData(tab_name, x = "Change Table (GF Only)", startCol = 11, startRow = 1) %T>%
-    openxlsx::addStyle(tab_name, createStyle(fontSize = 14, textDecoration = "bold", border = "bottom", borderStyle = "thin"), rows = 1, cols = 11) %T>%
+    openxlsx::addStyle(tab_name, createStyle(fontSize = 14), rows = 1, cols = 11) %T>%
     openxlsx::writeDataTable(
-      tab_name, change_table, xy = c(11, 2),
+      tab_name, change_table, xy = c(11, 3),
       tableStyle = "TableStyleLight8", 
       # headerStyle = createStyle(fontSize = 12, textDecoration = "bold", border = "bottom", borderStyle = "thin"),
       tableName = paste0("ChangeTable", svc_id)) %T>%
-    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#D9D9D9"), rows = c(3), cols = c(11:13)) %T>%
-    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#D9D9D9"), rows = c(4), cols = c(11:13)) %T>%
-    openxlsx::addStyle(tab_name, createStyle(indent = 5), rows = c(5,6,7,8,9,10, 11,12), cols = c(11)) %T>%
-    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#D9D9D9"), rows = c(14), cols = c(11:13)) %T>%
-    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#D9D9D9"), rows = c(17), cols = c(11:13)) %T>%
-    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#D9D9D9"), rows = c(20), cols = c(11:13)) %T>%
-    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#D9D9D9"), rows = c(23), cols = c(11:13)) %T>%
-    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#D9D9D9"), rows = c(26), cols = c(11:13)) %T>%
-    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#D9D9D9"), rows = c(29), cols = c(11:13)) %T>%
-    openxlsx::writeData(tab_name, x = "Analysis", startCol = 1, startRow = 22) %T>%
-    openxlsx::addStyle(tab_name, createStyle(fontSize = 12, textDecoration = "bold", border = c("bottom"), borderStyle = "thin"), rows = 22, cols = 1:9) %T>%
-    openxlsx::mergeCells(tab_name, cols = 1:9, rows = 23:28) %T>%
-    # openxlsx::addStyle(tab_name, createStyle(border = c("bottom", "top", "left", "right"), borderStyle = "thin"), rows = 23:28, cols = 1:9) %T>%
+    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#F2F2F2"), rows = 4, cols = c(11:13)) %T>%
+    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#F2F2F2"), rows = 5, cols = c(11:13)) %T>%
+    openxlsx::addStyle(tab_name, createStyle(indent = 5), rows = c(6,7,8,9,10, 11,12,13), cols = 11) %T>%
+    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#F2F2F2"), rows = 15, cols = c(11:13)) %T>%
+    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#F2F2F2"), rows = 18, cols = c(11:13)) %T>%
+    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#F2F2F2"), rows = 21, cols = c(11:13)) %T>%
+    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#F2F2F2"), rows = 24, cols = c(11:13)) %T>%
+    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#F2F2F2"), rows = 27, cols = c(11:13)) %T>%
+    openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#D9D9D9"), rows = 30, cols = c(11:13)) %T>%
+    ##analysis box
+    openxlsx::writeData(tab_name, x = "Analyst Notes", startCol = 1, startRow = 23) %T>%
+    openxlsx::addStyle(tab_name, createStyle(fontSize = 12), rows = 23, cols = 1) %T>%
+    openxlsx::addStyle(tab_name, createStyle(border = c("bottom", "top", "left", "right"), borderStyle = "thin"), rows = 24, cols = 1) %T>%
+    openxlsx::mergeCells(tab_name, cols = 1:9, rows = 24:29) %T>%
     # openxlsx::writeData(tab_name, x = "Describe major changes, 1 per row", startCol = 1, startRow = 14+dim(data)[1], borders = "surround") %T>%
+    ##technical and savings tables
     openxlsx::writeData(tab_name, x = "Tollgate Recommendations", startCol = 15, startRow = 1) %T>%
-    openxlsx::addStyle(tab_name, createStyle(fontSize = 14, textDecoration = "bold", border = "bottom", borderStyle = "thin"), rows = 1, cols = 15) %T>%
-    openxlsx::writeData(tab_name, x = "Technical Adjustments", startCol = 15, startRow = 2) %T>%
-    openxlsx::addStyle(tab_name, createStyle(fontSize = 12, textDecoration = "bold"), rows = 2, cols = 15) %T>%
+    openxlsx::addStyle(tab_name, createStyle(fontSize = 14), rows = 1, cols = 15) %T>%
+    openxlsx::writeData(tab_name, x = "Technical Adjustments", startCol = 15, startRow = 3) %T>%
+    openxlsx::addStyle(tab_name, createStyle(fontSize = 12), rows = 3, cols = 15) %T>%
     openxlsx::writeDataTable(
-      tab_name, tech_adjust, xy = c(15, 3),
+      tab_name, tech_adjust, xy = c(15, 4),
       tableStyle = "TableStyleLight8", 
       # headerStyle = createStyle(fontSize = 12, textDecoration = "bold", border = "bottom", borderStyle = "thin"),
       tableName = paste0("TechnicalAdjustments", svc_id)) %T>%
-    openxlsx::writeData(tab_name, x = "Savings Ideas", startCol = 15, startRow = dim(tech_adjust)[1]+5) %T>%
-    openxlsx::addStyle(tab_name, createStyle(fontSize = 12, textDecoration = "bold"), rows = dim(tech_adjust)[1]+5, cols = 15) %T>%
+    openxlsx::writeData(tab_name, x = "Savings Ideas", startCol = 15, startRow = dim(tech_adjust)[1]+6) %T>%
+    openxlsx::addStyle(tab_name, createStyle(fontSize = 12), rows = dim(tech_adjust)[1]+6, cols = 15) %T>%
     openxlsx::writeDataTable(
-      tab_name, savings_ideas, xy = c(15, dim(tech_adjust)[1]+6),
+      tab_name, savings_ideas, xy = c(15, dim(tech_adjust)[1]+7),
       tableStyle = "TableStyleLight8", 
       # headerStyle =createStyle(fontSize = 12, textDecoration = "bold", border = "bottom", borderStyle = "thin"),
     tableName = paste0("SavingsIdeas", svc_id)) %T>%
+    ##sheet settings
     openxlsx::setColWidths(tab_name, 1, widths = 20) %T>%
     openxlsx::setColWidths(tab_name, 2, widths = 20) %T>%
     openxlsx::setColWidths(tab_name, 3:9, widths = 15) %T>%
     openxlsx::setColWidths(tab_name, 10, widths = 5) %T>%
     openxlsx::setColWidths(tab_name, 11, widths = 50) %T>%
     openxlsx::setColWidths(tab_name, 12, widths = 15) %T>%
-    openxlsx::setColWidths(tab_name, 13, widths = 10) %T>%
+    openxlsx::setColWidths(tab_name, 13, widths = 20) %T>%
     openxlsx::setColWidths(tab_name, 14, widths = 5) %T>%
     openxlsx::setColWidths(tab_name, 15, widths = 30) %T>%
     openxlsx::pageSetup(tab_name, printTitleRows = 1) # repeat first row when printing
@@ -314,6 +336,11 @@ make_template <- function(
 }
 
 make_agency_summary <- function(agency, file_name) {
+  
+  options("openxlsx.orientation" = "landscape",
+          "openxlsx.datetimeFormat" = "yyyy-mm-dd",
+          "openxlsx.numFmt" = "#,##0;-#,##0;-")
+  
   tab_name = "Agency Summary"
   
   summary_dollars <- summary %>%
@@ -322,8 +349,10 @@ make_agency_summary <- function(agency, file_name) {
     unite("Service", c(`Service ID`, `Service Name`), sep = ": ") %>%
     select(-`Fund Name`, -`Objective Name`, -`Agency Name`, -Type) %>%
     arrange(Service) %>%
+    group_by(Service) %>%
+    summarise_if(is.numeric, sum, na.rm = TRUE) %>%
     adorn_totals() %>%
-    mutate(`FY24 TLS` = "TBD")
+    mutate(`Change $` = `FY24 Request`- `FY24 CLS`)
   
   summary_positions <- summary %>%
     ungroup() %>%
@@ -331,33 +360,42 @@ make_agency_summary <- function(agency, file_name) {
     unite("Service", c(`Service ID`, `Service Name`), sep = ": ") %>%
     select(-`Fund Name`, -`Objective Name`, -`Agency Name`, -Type) %>%
     arrange(Service) %>%
+    group_by(Service) %>%
+    summarise_if(is.numeric, sum, na.rm = TRUE) %>%
     adorn_totals() %>%
-    mutate(`FY24 TLS` = "TBD")
+    mutate(`Change #` = `FY24 Request`- `FY24 CLS`)
   
   agency_sheet <- openxlsx::loadWorkbook(file_name) %T>%
     openxlsx::addWorksheet(
       tab_name,
       header = c(gsub('\\..*', '', file_name), "&[Tab]", as.character(Sys.Date())),
       footer = c(NA, "&[Page]", NA)) %T>%
-    openxlsx::writeData(tab_name, x = "Dollars by Service", startCol = 1, startRow = 1) %T>%
+    openxlsx::writeData(tab_name, x = agency, startCol = 1, startRow = 1) %T>%
     openxlsx::addStyle(tab_name, createStyle(fontSize = 14, textDecoration = "bold", border = "bottom", borderStyle = "thin"), rows = 1, cols = 1) %T>%
+    ##dollars by service
+    openxlsx::writeData(tab_name, x = "Dollars by Service", startCol = 1, startRow = 4) %T>%
+    openxlsx::addStyle(tab_name, createStyle(fontSize = 14,  border = "bottom", borderStyle = "thin"), rows = 4, cols = 1) %T>%
     openxlsx::writeDataTable(
-      tab_name, summary_dollars, xy = c(1, 2),
+      tab_name, summary_dollars, xy = c(1, 5),
       tableStyle = "TableStyleLight8", 
       # headerStyle = createStyle(fontSize = 12, textDecoration = "bold", border = "bottom", borderStyle = "thin"),
       tableName = paste0("DollarsbyService")) %T>%
-    openxlsx::writeData(tab_name, x = "Positions by Service", startCol = 1, startRow = dim(summary_dollars)[1]+3) %T>%
-    openxlsx::addStyle(tab_name, createStyle(fontSize = 14, textDecoration = "bold", border = "bottom", borderStyle = "thin"), rows = dim(summary_dollars)[1]+3, cols = 1) %T>%
+    ##positions by service
+    openxlsx::writeData(tab_name, x = "Positions by Service", startCol = 1, startRow = dim(summary_dollars)[1]+7) %T>%
+    openxlsx::addStyle(tab_name, createStyle(fontSize = 14,  border = "bottom", borderStyle = "thin"), rows = dim(summary_dollars)[1]+7, cols = 1) %T>%
     openxlsx::writeDataTable(
-      tab_name, summary_positions, xy = c(1, dim(summary_dollars)[1]+4),
+      tab_name, summary_positions, xy = c(1, dim(summary_dollars)[1]+8),
       tableStyle = "TableStyleLight8", 
-      headerStyle = createStyle(fontSize = 12, textDecoration = "bold", border = "bottom", borderStyle = "thin"),
+      headerStyle = createStyle(fontSize = 12),
       tableName = paste0("PositionsbyService")) %T>%
-    openxlsx::writeData(tab_name, x = "Agency Budget Highlights", startCol = dim(summary_dollars)[2]+2, startRow = 1) %T>%
-    openxlsx::addStyle(tab_name, createStyle(fontSize = 14, textDecoration = "bold", border = "bottom", borderStyle = "thin"), rows = 1, cols = dim(summary_dollars)[2]+2) %T>%
-    openxlsx::writeData(tab_name, x = "Add text here", startCol = dim(summary_dollars)[2]+2, startRow = 2) %T>%
-    openxlsx::setColWidths(tab_name, dim(summary_dollars)[2]+2, widths = 45) %T>%
-    openxlsx::setColWidths(tab_name, 1, widths = 45)
+    ##notes
+    openxlsx::writeData(tab_name, x = "Agency Budget Highlights", startCol = 8, startRow = 4) %T>%
+    openxlsx::addStyle(tab_name, createStyle(fontSize = 14), rows = 4, cols = 8) %T>%
+    # openxlsx::writeData(tab_name, x = "Add text here", startCol = dim(summary_dollars)[2]+2, startRow = 2) %T>%
+    openxlsx::mergeCells(tab_name, cols = 8:14, rows = 5:20)%T>%
+    openxlsx::setColWidths(tab_name, 8, widths = 45) %T>%
+    openxlsx::setColWidths(tab_name, 1, widths = 45) %T>%
+    openxlsx::setColWidths(tab_name, 2:6, 16)
 
   openxlsx::saveWorkbook(agency_sheet, file_name, overwrite = TRUE)
   base::message(tab_name, ' tab created in the file saved as ', file_name)
@@ -418,6 +456,6 @@ export_template <- function(agency, data) {
   }}
 
 ##testing
-export_template("M-R: Office of Children and Family Success", summary)
+export_template("Sheriff", summary)
 
 map(agencies, export_template, summary)
