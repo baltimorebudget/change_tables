@@ -19,7 +19,7 @@ source("G:/Budget Publications/automation/2_agency_detail/bookAgencyDetail/R/1b_
 
 params = list(fy = 24)
 
-options("openxlsx.numFmt" = "#,##0")
+options(openxlsx.numFmt = "#,##0;(#,##0);--")
 
 #data from 0_data_prep ====
 analysts <- import("G:/Analyst Folders/Sara Brumfield/_ref/Analyst Assignments.xlsx") %>%
@@ -107,10 +107,10 @@ osos <- readRDS(paste0(path$prop, "expenditure.Rds")) %>%
     # `Fund` = case_when(`Fund Name` == "General" ~ "General Fund",
     #                         TRUE ~ "All Other Funds"),
          `OSO` = case_when(`Subobject ID` %in% c("101", "161", "162") ~ "Permanent Wages Adjustment",
-                           `Subobject ID` %in% c("204", "245", "788", "202", "203", "279") ~ "Pension Adjustment",
-                           `Subobject ID` %in% c("207", "85", "285", "368", "766") ~ "Healthcare Adjustment",
-                           `Subobject ID` %in% c("357", "335", "401", "331", "341") ~ "Fleet Adjustment",
-                           `Subobject ID` %in% c("352", "311", "313", "316", "336", "380") ~ "Building Maintenance and Rental Charge Adjustment",
+                           `Subobject ID` %in% c("204", "202", "203", "279") ~ "Pension Adjustment",
+                           `Subobject ID` %in% c("205", "285") ~ "Healthcare Adjustment",
+                           `Subobject ID` %in% c("335", "401", "331") ~ "Fleet Adjustment",
+                           `Subobject ID` %in% c("396") ~ "Building Maintenance and Rental Charge Adjustment",
                            TRUE ~ "Other"),
          Diff = `FY24 Budget` - `FY24 CLS`) %>%
   # relocate(Fund, .after = `Fund Name`) %>%
@@ -142,9 +142,9 @@ make_template <- function(
   
   Sys.setenv("R_ZIPCMD" = "C:/Rtools/bin/zip.exe") # corrects Rtools in wrong env error
   
-  options("openxlsx.orientation" = "landscape",
-          "openxlsx.datetimeFormat" = "yyyy-mm-dd",
-          "openxlsx.numFmt" = "#,##0;-#,##0;--")
+  # options("openxlsx.orientation" = "landscape",
+  #         "openxlsx.datetimeFormat" = "yyyy-mm-dd",
+  #         openxlsx.numFmt = "#,##0;(#,##0);--")
   
   
   agency <- unique(df$`Agency Name`)
@@ -158,16 +158,17 @@ make_template <- function(
     mutate(`FY24 TLS` = 0,
            `Change $` = `FY24 Request` - `FY24 CLS`) %>%
     rowwise() %>%
-    mutate(`Change %` = ifelse(is.numeric(round(((`FY24 Request` - `FY24 CLS`)/`FY24 CLS`) * 100, 1)), (round(((`FY24 Request` - `FY24 CLS`)/`FY24 CLS`) * 100, 1)), 0)) %>%
+    mutate(`Change %` = ifelse((`FY24 Request`==0 | `FY24 CLS`==0), NA, (round(((`FY24 Request` - `FY24 CLS`)/`FY24 CLS`) * 100, 1)))) %>%
     arrange(Type, match(`Fund Name`, c("General", "Internal Service", "Federal", "State", "Special Grant", "Special Revenue", "Parking Management", "Conduit Enterprise", "Stormwater Utility", "Wastewater Utility", "Convention Center Bond", "Loan and Guarantee Enterprise", "Motor Vehicle", NA)))
   
   dollar_data <- data %>%
     filter(Type == "Expenditures") %>%
     select(-Type)
-
-  position_data <- data %>%
-    filter(Type == "Positions") %>%
-    select(-Type)
+  # 
+  # position_data <- data %>%
+  #   filter(Type == "Positions") %>%
+  #   select(-Type)
+  
   
   tech_adjust <- data.frame(Item = c("Enter item here", "", "", "", "Total"),
                             Object = c(rep("", 5)),
@@ -210,13 +211,13 @@ make_template <- function(
                                                 "FY2024 Budget"),
                               Amount = c(sum(data$`FY23 Adopted`[data$Type=="Expenditures" & data$`Fund Name` == "General"], na.rm = TRUE), 
                                          sum(data$`FY24 CLS`[data$Type=="Expenditures" & data$`Fund Name` == "General"], na.rm = TRUE), 
-                                         sum(oso$`Diff`[oso$OSO=="Permanent Wages Adjustment" & oso$`Fund Name` == "General"], na.rm = TRUE), 
-                                         sum(oso$`Diff`[oso$OSO=="Pension Adjustment" & oso$`Fund Name` == "General"], na.rm = TRUE), 
-                                         sum(oso$`Diff`[oso$OSO=="Healthcare Adjustment" & oso$`Fund Name` == "General"], na.rm = TRUE), 
+                                         sum(oso$`Diff`[oso$OSO=="Permanent Wages Adjustment"], na.rm = TRUE), 
+                                         sum(oso$`Diff`[oso$OSO=="Pension Adjustment"], na.rm = TRUE), 
+                                         sum(oso$`Diff`[oso$OSO=="Healthcare Adjustment"], na.rm = TRUE), 
                                          "",
-                                         sum(oso$`Diff`[oso$OSO=="Fleet Adjustment" & oso$`Fund Name` == "General"], na.rm = TRUE), 
-                                         sum(oso$`Diff`[oso$OSO=="Building Maintenance and Rental Charge Adjustment" & oso$`Fund Name` == "General"], na.rm = TRUE), 
-                                         sum(oso$`Diff`[oso$OSO=="Other" & oso$`Fund Name` == "General"], na.rm = TRUE),
+                                         sum(oso$`Diff`[oso$OSO=="Fleet Adjustment"], na.rm = TRUE), 
+                                         sum(oso$`Diff`[oso$OSO=="Building Maintenance and Rental Charge Adjustment"], na.rm = TRUE), 
+                                         sum(oso$`Diff`[oso$OSO=="Other"], na.rm = TRUE),
                                          "", 
                                          "",
                                          sum(data$`FY24 Request`[data$Type=="Expenditures" & data$`Fund Name` == "General"], na.rm = TRUE), 
@@ -237,6 +238,9 @@ make_template <- function(
                                          "Pending"),
                              `Tollgate Decision` = rep("", 27))
   
+  data <- data %>%
+    select(-Type)
+  
   excel <- switch(type,
                   "new" = openxlsx::createWorkbook(),
                   "existing" = openxlsx::loadWorkbook(file_name)) %T>%
@@ -246,40 +250,46 @@ make_template <- function(
       footer = c(NA, "&[Page]", NA), visible = show_tab) %T>%
     ##heading info
     openxlsx::writeData(tab_name, x = "Service Summary", startCol = 1, startRow = 1) %T>%
-    openxlsx::addStyle(tab_name, createStyle(fontSize = 14, textDecoration = "bold", border = "bottom", borderStyle = "thin"), rows = 1, cols = 1) %T>%
-    openxlsx::writeData(tab_name, x = "Agency", startCol = 1, startRow = 2) %T>%
-    openxlsx::writeData(tab_name, x = "Service Name", startCol = 1, startRow = 3) %T>%
-    openxlsx::writeData(tab_name, x = "Service ID", startCol = 1, startRow = 4) %T>%
-    openxlsx::writeData(tab_name, x = "Pillar", startCol = 1, startRow = 5) %T>%
-    openxlsx::writeData(tab_name, x = agency, startCol = 2, startRow = 2) %T>%
-    openxlsx::writeData(tab_name, x = svc_name, startCol = 2, startRow = 3) %T>%
-    openxlsx::writeData(tab_name, x = svc_id, startCol = 2, startRow = 4) %T>%
-    openxlsx::writeData(tab_name, x = pillar, startCol = 2, startRow = 5) %T>%
+    openxlsx::addStyle(tab_name, createStyle(fontSize = 14, halign = "center"), rows = 1, cols = 1, gridExpand = TRUE) %T>%
+    openxlsx::mergeCells(tab_name, cols = 1:9, rows = 1) %T>%
+    openxlsx::writeData(tab_name, x = "Agency", startCol = 1, startRow = 3) %T>%
+    openxlsx::writeData(tab_name, x = "Service Name", startCol = 1, startRow = 4) %T>%
+    openxlsx::writeData(tab_name, x = "Service ID", startCol = 1, startRow = 5) %T>%
+    openxlsx::writeData(tab_name, x = "Pillar", startCol = 1, startRow = 6) %T>%
+    openxlsx::writeData(tab_name, x = agency, startCol = 2, startRow = 3) %T>%
+    openxlsx::writeData(tab_name, x = svc_name, startCol = 2, startRow = 4) %T>%
+    openxlsx::writeData(tab_name, x = svc_id, startCol = 2, startRow = 5) %T>%
+    openxlsx::writeData(tab_name, x = pillar, startCol = 2, startRow = 6) %T>%
     ##budget summary headers
-    openxlsx::writeData(tab_name, x = "Budget Summary", startCol = 1, startRow = 7) %T>%
-    openxlsx::addStyle(tab_name, createStyle(fontSize = 12), rows = 7, cols = 1) %T>%
-    openxlsx::writeData(tab_name, x = "Budget Amounts", startCol = 3, startRow = 8) %T>%
-    openxlsx::mergeCells(tab_name, cols = 3:7, rows = 8) %T>%
-    openxlsx::addStyle(tab_name, createStyle(fontSize = 12, halign = "center", border = c("left","right", "top")), rows = 8, cols = 3) %T>%
-    openxlsx::writeData(tab_name, x = "Change Amounts", startCol = 8, startRow = 8) %T>%
-    openxlsx::mergeCells(tab_name, cols = 8:9, rows = 8) %T>%
-    openxlsx::addStyle(tab_name, createStyle(fontSize = 12, halign = "center", border = c("left", "right", "top")), rows = 8, cols = 8) %T>%
+    openxlsx::writeData(tab_name, x = "Budget Summary", startCol = 1, startRow = 8) %T>%
+    openxlsx::addStyle(tab_name, createStyle(fontSize = 12), rows = 8, cols = 1) %T>%
+    openxlsx::writeData(tab_name, x = "Budget Amounts", startCol = 3, startRow = 9) %T>%
+    openxlsx::mergeCells(tab_name, cols = 3:7, rows = 9) %T>%
+    openxlsx::addStyle(tab_name, createStyle(fontSize = 12, halign = "center", border = c("left","right", "top")), rows = 9, cols = 3) %T>%
+    openxlsx::addStyle(tab_name, createStyle(fontSize = 12, halign = "center", border = "top"), rows = 9, cols = 4:7, gridExpand = TRUE) %T>%
+    openxlsx::writeData(tab_name, x = "Change Amounts", startCol = 8, startRow = 9) %T>%
+    openxlsx::mergeCells(tab_name, cols = 8:9, rows = 9) %T>%
+    openxlsx::addStyle(tab_name, createStyle(fontSize = 12, halign = "center", border = c("left", "top")), rows = 9, cols = 8) %T>%
+    openxlsx::addStyle(tab_name, createStyle(fontSize = 12, halign = "center", border = c("right", "top")), rows = 9, cols = 9) %T>%
     ##budget dollars summary data table
-    openxlsx::writeData(tab_name, x = "Budget by Fund", startCol = 1, startRow = 10) %T>%
+    openxlsx::writeData(tab_name, x = "Budget by Fund", startCol = 1, startRow = 11) %T>%
     openxlsx::writeDataTable(
-      tab_name, dollar_data, xy = c(2, 9), tableStyle = "TableStyleLight8",
+      tab_name, data, xy = c(2, 10), tableStyle = "TableStyleLight1", bandedRows = FALSE,
+      headerStyle = createStyle(fgFill = "#16365C", fontColour = "white"),
       tableName = paste0("DollarData", svc_id)) %T>%
     ##budget position summary data table
     openxlsx::writeData(tab_name, x = "Positions by Fund", startCol = 1, startRow = dim(dollar_data)[1]+11) %T>%
-    openxlsx::writeDataTable(
-      tab_name, position_data, xy = c(2, dim(dollar_data)[1]+10), tableStyle = "TableStyleLight8",
-      tableName = paste0("PositionData", svc_id)) %T>%
+    # addStyle(tab_name, createStyle(border = "left"), rows = 11:11+dim(data)[1], cols = 1:9) %T>%
+    # openxlsx::writeDataTable(
+    #   tab_name, position_data, xy = c(2, dim(dollar_data)[1]+10), tableStyle = "TableStyleLight1",
+    #   tableName = paste0("PositionData", svc_id)) %T>%
     ##change table
     openxlsx::writeData(tab_name, x = "Change Table (GF Only)", startCol = 11, startRow = 1) %T>%
-    openxlsx::addStyle(tab_name, createStyle(fontSize = 14), rows = 1, cols = 11) %T>%
+    openxlsx::addStyle(tab_name, createStyle(fontSize = 14, halign = "center"), rows = 1, cols = 11) %T>%
+    openxlsx::mergeCells(tab_name, cols = 11:13, rows = 1) %T>%
     openxlsx::writeDataTable(
-      tab_name, change_table, xy = c(11, 3),
-      tableStyle = "TableStyleLight8", 
+      tab_name, change_table, xy = c(11, 3), bandedRows = FALSE,
+      tableStyle = "TableStyleLight1", headerStyle = createStyle(fgFill = "#16365C", fontColour = "white"),
       # headerStyle = createStyle(fontSize = 12, textDecoration = "bold", border = "bottom", borderStyle = "thin"),
       tableName = paste0("ChangeTable", svc_id)) %T>%
     openxlsx::addStyle(tab_name, createStyle(textDecoration = "bold", fgFill = "#F2F2F2"), rows = 4, cols = c(11:13)) %T>%
@@ -294,37 +304,62 @@ make_template <- function(
     ##analysis box
     openxlsx::writeData(tab_name, x = "Analyst Notes", startCol = 1, startRow = 23) %T>%
     openxlsx::addStyle(tab_name, createStyle(fontSize = 12), rows = 23, cols = 1) %T>%
-    openxlsx::addStyle(tab_name, createStyle(border = c("bottom", "top", "left", "right"), borderStyle = "thin"), rows = 24, cols = 1) %T>%
     openxlsx::mergeCells(tab_name, cols = 1:9, rows = 24:29) %T>%
+    openxlsx::addStyle(tab_name, createStyle(border = "top", borderStyle = "thin"), rows = 24, cols = 1:9, gridExpand = TRUE) %T>%
+    openxlsx::addStyle(tab_name, createStyle(border = "bottom", borderStyle = "thin"), rows = 29, cols = 1:9, gridExpand = TRUE) %T>%
+    openxlsx::addStyle(tab_name, createStyle(border = "right", borderStyle = "thin"), rows = 24:29, cols = 9, gridExpand = TRUE) %T>%
+    openxlsx::addStyle(tab_name, createStyle(border = c("top", "right"), borderStyle = "thin"), rows = 24, cols = 9, gridExpand = TRUE) %T>%
+    openxlsx::addStyle(tab_name, createStyle(border = c("bottom", "right"), borderStyle = "thin"), rows = 29, cols = 9, gridExpand = TRUE) %T>%
     # openxlsx::writeData(tab_name, x = "Describe major changes, 1 per row", startCol = 1, startRow = 14+dim(data)[1], borders = "surround") %T>%
     ##technical and savings tables
     openxlsx::writeData(tab_name, x = "Tollgate Recommendations", startCol = 15, startRow = 1) %T>%
-    openxlsx::addStyle(tab_name, createStyle(fontSize = 14), rows = 1, cols = 15) %T>%
+    openxlsx::addStyle(tab_name, createStyle(fontSize = 14, halign = "center"), rows = 1, cols = 15) %T>%
+    openxlsx::mergeCells(tab_name, cols = 15:19, rows = 1) %T>%
     openxlsx::writeData(tab_name, x = "Technical Adjustments", startCol = 15, startRow = 3) %T>%
     openxlsx::addStyle(tab_name, createStyle(fontSize = 12), rows = 3, cols = 15) %T>%
     openxlsx::writeDataTable(
       tab_name, tech_adjust, xy = c(15, 4),
-      tableStyle = "TableStyleLight8", 
+      tableStyle = "TableStyleLight1", bandedRows = FALSE,
+      headerStyle = createStyle(fgFill = "#16365C", fontColour = "white"),
       # headerStyle = createStyle(fontSize = 12, textDecoration = "bold", border = "bottom", borderStyle = "thin"),
       tableName = paste0("TechnicalAdjustments", svc_id)) %T>%
     openxlsx::writeData(tab_name, x = "Savings Ideas", startCol = 15, startRow = dim(tech_adjust)[1]+6) %T>%
     openxlsx::addStyle(tab_name, createStyle(fontSize = 12), rows = dim(tech_adjust)[1]+6, cols = 15) %T>%
     openxlsx::writeDataTable(
       tab_name, savings_ideas, xy = c(15, dim(tech_adjust)[1]+7),
-      tableStyle = "TableStyleLight8", 
+      tableStyle = "TableStyleLight1", bandedRows = FALSE,
+      headerStyle = createStyle(fgFill = "#16365C", fontColour = "white"),
       # headerStyle =createStyle(fontSize = 12, textDecoration = "bold", border = "bottom", borderStyle = "thin"),
     tableName = paste0("SavingsIdeas", svc_id)) %T>%
+    #narrative section
+    openxlsx::writeData(tab_name, x = "Tollgate Notes", startCol = 15, startRow = 19) %T>%
+    openxlsx::addStyle(tab_name, createStyle(fontSize = 12), rows = 19, cols = 15) %T>%
+    openxlsx::mergeCells(tab_name, cols = 15:19, rows = 20:25) %T>%
+    openxlsx::addStyle(tab_name, createStyle(border = "top", borderStyle = "thin"), rows = 20, cols = 15:19, gridExpand = TRUE) %T>%
+    openxlsx::addStyle(tab_name, createStyle(border = "bottom", borderStyle = "thin"), rows = 25, cols = 15:19, gridExpand = TRUE) %T>%
+    openxlsx::addStyle(tab_name, createStyle(border = "right", borderStyle = "thin"), rows = 20:25, cols = 19, gridExpand = TRUE) %T>%
+    openxlsx::addStyle(tab_name, createStyle(border = "left", borderStyle = "thin"), rows = 20:25, cols = 15, gridExpand = TRUE) %T>%
+    openxlsx::addStyle(tab_name, createStyle(border = c("left", "top"), borderStyle = "thin"), rows = 20, cols = 15, gridExpand = TRUE) %T>%
+    openxlsx::addStyle(tab_name, createStyle(border = c("left", "bottom"), borderStyle = "thin"), rows = 25, cols = 15, gridExpand = TRUE) %T>%
+    openxlsx::addStyle(tab_name, createStyle(border = c("right", "top"), borderStyle = "thin"), rows = 20, cols = 19, gridExpand = TRUE) %T>%
+    openxlsx::addStyle(tab_name, createStyle(border = c("right", "bottom"), borderStyle = "thin"), rows = 25, cols = 19, gridExpand = TRUE) %T>%
     ##sheet settings
     openxlsx::setColWidths(tab_name, 1, widths = 20) %T>%
     openxlsx::setColWidths(tab_name, 2, widths = 20) %T>%
     openxlsx::setColWidths(tab_name, 3:9, widths = 15) %T>%
     openxlsx::setColWidths(tab_name, 10, widths = 5) %T>%
-    openxlsx::setColWidths(tab_name, 11, widths = 50) %T>%
+    openxlsx::setColWidths(tab_name, 11, widths = 55) %T>%
     openxlsx::setColWidths(tab_name, 12, widths = 15) %T>%
     openxlsx::setColWidths(tab_name, 13, widths = 20) %T>%
     openxlsx::setColWidths(tab_name, 14, widths = 5) %T>%
     openxlsx::setColWidths(tab_name, 15, widths = 30) %T>%
     openxlsx::pageSetup(tab_name, printTitleRows = 1) # repeat first row when printing
+  # 
+  # options("openxlsx.orientation" = "landscape",
+  #         "openxlsx.datetimeFormat" = "yyyy-mm-dd",
+  #         openxlsx.numFmt = "#,##0;(#,##0);--",
+  #         "openxlsx.halign" = "right")
+  
   
   if (save == TRUE) {
     openxlsx::saveWorkbook(excel, file_name, overwrite = TRUE)
@@ -337,9 +372,9 @@ make_template <- function(
 
 make_agency_summary <- function(agency, file_name) {
   
-  options("openxlsx.orientation" = "landscape",
-          "openxlsx.datetimeFormat" = "yyyy-mm-dd",
-          "openxlsx.numFmt" = "#,##0;-#,##0;-")
+  # options("openxlsx.orientation" = "landscape",
+  #         "openxlsx.datetimeFormat" = "yyyy-mm-dd",
+  #         openxlsx.numFmt = "#,##0;(#,##0);--")
   
   tab_name = "Agency Summary"
   
@@ -374,28 +409,40 @@ make_agency_summary <- function(agency, file_name) {
     openxlsx::addStyle(tab_name, createStyle(fontSize = 14, textDecoration = "bold", border = "bottom", borderStyle = "thin"), rows = 1, cols = 1) %T>%
     ##dollars by service
     openxlsx::writeData(tab_name, x = "Dollars by Service", startCol = 1, startRow = 4) %T>%
-    openxlsx::addStyle(tab_name, createStyle(fontSize = 14,  border = "bottom", borderStyle = "thin"), rows = 4, cols = 1) %T>%
+    openxlsx::addStyle(tab_name, createStyle(fontSize = 14), rows = 4, cols = 1) %T>%
     openxlsx::writeDataTable(
       tab_name, summary_dollars, xy = c(1, 5),
-      tableStyle = "TableStyleLight8", 
+      tableStyle = "TableStyleLight1", bandedRows = FALSE,
+      headerStyle = createStyle(fgFill = "#16365C", fontColour = "white"),
       # headerStyle = createStyle(fontSize = 12, textDecoration = "bold", border = "bottom", borderStyle = "thin"),
       tableName = paste0("DollarsbyService")) %T>%
     ##positions by service
     openxlsx::writeData(tab_name, x = "Positions by Service", startCol = 1, startRow = dim(summary_dollars)[1]+7) %T>%
-    openxlsx::addStyle(tab_name, createStyle(fontSize = 14,  border = "bottom", borderStyle = "thin"), rows = dim(summary_dollars)[1]+7, cols = 1) %T>%
+    openxlsx::addStyle(tab_name, createStyle(fontSize = 14), rows = dim(summary_dollars)[1]+7, cols = 1) %T>%
     openxlsx::writeDataTable(
       tab_name, summary_positions, xy = c(1, dim(summary_dollars)[1]+8),
-      tableStyle = "TableStyleLight8", 
-      headerStyle = createStyle(fontSize = 12),
+      tableStyle = "TableStyleLight1", bandedRows = FALSE,
+      headerStyle = createStyle(fgFill = "#16365C", fontColour = "white"),
+      # headerStyle = createStyle(fontSize = 12),
       tableName = paste0("PositionsbyService")) %T>%
     ##notes
     openxlsx::writeData(tab_name, x = "Agency Budget Highlights", startCol = 8, startRow = 4) %T>%
-    openxlsx::addStyle(tab_name, createStyle(fontSize = 14), rows = 4, cols = 8) %T>%
+    openxlsx::addStyle(tab_name, createStyle(fontSize = 14), rows = 4, cols = 8, gridExpand = TRUE) %T>%
+    openxlsx::mergeCells(tab_name, cols = 8:14, rows = 5:20) %T>%
     # openxlsx::writeData(tab_name, x = "Add text here", startCol = dim(summary_dollars)[2]+2, startRow = 2) %T>%
-    openxlsx::mergeCells(tab_name, cols = 8:14, rows = 5:20)%T>%
+    openxlsx::addStyle(tab_name, createStyle(border = "left", borderStyle = "thin"), rows = 5:20, cols = 8, gridExpand = T) %T>%
+    openxlsx::addStyle(tab_name, createStyle(border = "top", borderStyle = "thin"), rows = 5, cols = 8:14, gridExpand = T) %T>%
+    openxlsx::addStyle(tab_name, createStyle(border = "right", borderStyle = "thin"), rows = 5:20, cols = 14, gridExpand = T) %T>%
+    openxlsx::addStyle(tab_name, createStyle(border = "bottom", borderStyle = "thin"), rows = 20, cols = 8:14, gridExpand = T) %T>%
+    openxlsx::addStyle(tab_name, createStyle(border = c("bottom", "left"), borderStyle = "thin"), rows = 20, cols = 8, gridExpand = T) %T>%
+    openxlsx::addStyle(tab_name, createStyle(border = c("top", "left"), borderStyle = "thin"), rows = 5, cols = 8, gridExpand = T) %T>%
+    openxlsx::addStyle(tab_name, createStyle(border = c("bottom", "right"), borderStyle = "thin"), rows = 20, cols = 14, gridExpand = T) %T>%
+    openxlsx::addStyle(tab_name, createStyle(border = c("top", "right"), borderStyle = "thin"), rows = 5, cols = 14, gridExpand = T) %T>%
     openxlsx::setColWidths(tab_name, 8, widths = 45) %T>%
     openxlsx::setColWidths(tab_name, 1, widths = 45) %T>%
     openxlsx::setColWidths(tab_name, 2:6, 16)
+  
+  
 
   openxlsx::saveWorkbook(agency_sheet, file_name, overwrite = TRUE)
   base::message(tab_name, ' tab created in the file saved as ', file_name)
@@ -429,23 +476,20 @@ export_template <- function(agency, data) {
         filter(`Service ID` == i)
       
       oso <- osos %>%
-        filter(`Service ID` == i)
+        filter(`Service ID` == i & `Fund Name` == "General") %>%
+        select(-`Fund Name`) %>%
+        group_by(`Agency Name`, `Service ID`, `Service Name`, OSO) %>%
+        summarise_if(is.numeric, sum, na.rm = TRUE) %>%
+        ungroup()
+      
+      options("openxlsx.numFmt" = "#,##0;(#,##0);--")
 
         excel <- suppressMessages(
           make_template(df = df, oso = oso, svc = i, tab_name = i, file_name = file_name,
                        save = FALSE,
                        type = ifelse(i == svcs[1], "new", "existing")))
-        
-        ##style elements
-        # mergeCells(excel, n, cols = 5, rows = 2:12)
-        # style <- createStyle(wrapText = TRUE) %T>%
-        # addStyle(wb, sheet = n, style, cols = 5:6, rows = 2:12, gridExpand = TRUE)
-        # setColWidths(wb, i, 1, widths = 45, hidden = FALSE) 
-        # setColWidths(wb, i, 2, widths = 30, hidden = FALSE) 
-        # setColWidths(wb, i, 3:6, widths = 15, hidden = FALSE)
-        # writeFormula(excel, n, x = "CHAR(10)", startCol = 5, startRow = 2)
-        #freeze notes cells next to budget line
 
+      options("openxlsx.numFmt" = "#,##0;(#,##0);--")
       openxlsx::saveWorkbook(excel, file_name, overwrite = TRUE)    
       n = n + 1
       # cat(".") # progress bar of sorts
@@ -456,6 +500,6 @@ export_template <- function(agency, data) {
   }}
 
 ##testing
-export_template("Sheriff", summary)
+export_template("M-R: Office of Children and Family Success", summary)
 
 map(agencies, export_template, summary)
