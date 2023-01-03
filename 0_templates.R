@@ -101,8 +101,8 @@ summary <- line_item %>%
 check <- summary %>% group_by(`Agency Name`, `Service ID`) %>% summarise(count = n())
 
 ##OSO changes
-osos <- readRDS(paste0(path$prop, "expenditure.Rds")) %>%
-  select(`Agency Name`:`Service Name`, `Fund ID`:`Fund Name`, `Subobject ID`, `Subobject Name`, `FY24 CLS`:`FY24 Budget`) %>%
+osos <- readRDS(paste0(path$cls, "expenditure.Rds")) %>%
+  select(`Agency Name`:`Service Name`, `Fund ID`:`Fund Name`, `Subobject ID`, `Subobject Name`, `FY23 Budget`, `FY24 Budget`) %>%
   mutate(
     # `Fund` = case_when(`Fund Name` == "General" ~ "General Fund",
     #                         TRUE ~ "All Other Funds"),
@@ -112,7 +112,7 @@ osos <- readRDS(paste0(path$prop, "expenditure.Rds")) %>%
                            `Subobject ID` %in% c("335", "401", "331") ~ "Fleet Adjustment",
                            `Subobject ID` %in% c("396") ~ "Building Maintenance and Rental Charge Adjustment",
                            TRUE ~ "Other"),
-         Diff = `FY24 Budget` - `FY24 CLS`) %>%
+         Diff = `FY24 Budget` - `FY23 Budget`) %>%
   # relocate(Fund, .after = `Fund Name`) %>%
   # select(-`Fund Name`, -`Fund ID`, -`Subobject ID`, -`Subobject Name`) %>%
   group_by(`Agency Name`, `Service ID`, `Service Name`, `Fund Name`, OSO) %>%
