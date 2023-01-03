@@ -101,8 +101,28 @@ summary <- line_item %>%
 check <- summary %>% group_by(`Agency Name`, `Service ID`) %>% summarise(count = n())
 
 ##OSO changes
-osos <- readRDS(paste0(path$cls, "expenditure.Rds")) %>%
-  select(`Agency Name`:`Service Name`, `Fund ID`:`Fund Name`, `Subobject ID`, `Subobject Name`, `FY23 Budget`, `FY24 Budget`) %>%
+
+osos <- list(
+  cls = readRDS(paste0(path$cls, "expenditure.Rds")),
+  prop = readRDS(paste0(path$prop, "expenditure.Rds")))  %>%
+  map(group_by_at, vars(starts_with("Agency Name"), starts_with("Service"), starts_with("Fund"), starts_with("Subobject"))) %>%
+  map(summarize_at, vars(starts_with("FY")), sum, na.rm = TRUE) %>%
+  map(ungroup)
+
+osos$cls <- osos$cls %>%
+  select(-ends_with("Name"), -ends_with("Actual"), -!!paste0("FY", params$fy - 1, " Budget")) %>%
+  rename(!!cols$dollars_cls := !!paste0("FY", params$fy, " Budget"))
+
+osos$prop <- osos$prop %>%
+  select(`Agency Name`:`Subobject Name`, !!cols$expend$prior, !!cols$expend$projection, 
+         !!cols$dollars_prop := !!paste0("FY", params$fy, " Budget")) %>%
+  set_colnames(gsub("Budget|Actual", "Dollars", names(.)))
+
+osos <- osos$prop %>%
+  left_join(osos$cls) %>%
+  relocate(!!cols$dollars_prop, .after = last_col()) %>%
+  select(`Agency Name`:`Service Name`, `Fund ID`:`Fund Name`, `Subobject ID`, `Subobject Name`, `FY23 Dollars`, `FY24 Dollars - CLS`, `FY24 Dollars - PROP`) %>%
+  filter(`Fund Name` == "General") %>%
   mutate(
     # `Fund` = case_when(`Fund Name` == "General" ~ "General Fund",
     #                         TRUE ~ "All Other Funds"),
@@ -112,7 +132,7 @@ osos <- readRDS(paste0(path$cls, "expenditure.Rds")) %>%
                            `Subobject ID` %in% c("335", "401", "331") ~ "Fleet Adjustment",
                            `Subobject ID` %in% c("396") ~ "Building Maintenance and Rental Charge Adjustment",
                            TRUE ~ "Other"),
-         Diff = `FY24 Budget` - `FY23 Budget`) %>%
+         Diff = `FY24 Dollars - CLS` - `FY23 Dollars`) %>%
   # relocate(Fund, .after = `Fund Name`) %>%
   # select(-`Fund Name`, -`Fund ID`, -`Subobject ID`, -`Subobject Name`) %>%
   group_by(`Agency Name`, `Service ID`, `Service Name`, `Fund Name`, OSO) %>%
