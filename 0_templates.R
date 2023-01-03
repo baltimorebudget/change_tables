@@ -119,6 +119,7 @@ osos <- readRDS(paste0(path$prop, "expenditure.Rds")) %>%
   summarise_if(is.numeric, sum, na.rm = TRUE) %>%
   filter(Diff != 0)
 
+# get correct format
 agencies = analysts$`Agency Name`
 
 ##agency summary tables from 2_agency_detail ===========
@@ -400,6 +401,17 @@ make_agency_summary <- function(agency, file_name) {
     adorn_totals() %>%
     mutate(`Change #` = `FY24 Request`- `FY24 CLS`)
   
+  summary_fund <- summary %>%
+    ungroup() %>%
+    filter(`Agency Name` == agency & Type == "Expenditures") %>%
+    unite("Service", c(`Service ID`, `Service Name`), sep = ": ") %>%
+    select(-`Objective Name`, -`Agency Name`, -Type) %>%
+    arrange(Service) %>%
+    group_by(`Fund Name`) %>%
+    summarise_if(is.numeric, sum, na.rm = TRUE) %>%
+    adorn_totals() %>%
+    mutate(`Change $` = `FY24 Request`- `FY24 CLS`)
+  
   agency_sheet <- openxlsx::loadWorkbook(file_name) %T>%
     openxlsx::addWorksheet(
       tab_name,
@@ -407,20 +419,29 @@ make_agency_summary <- function(agency, file_name) {
       footer = c(NA, "&[Page]", NA)) %T>%
     openxlsx::writeData(tab_name, x = agency, startCol = 1, startRow = 1) %T>%
     openxlsx::addStyle(tab_name, createStyle(fontSize = 14, textDecoration = "bold", border = "bottom", borderStyle = "thin"), rows = 1, cols = 1) %T>%
-    ##dollars by service
-    openxlsx::writeData(tab_name, x = "Dollars by Service", startCol = 1, startRow = 4) %T>%
+    ##dollars by fund
+    openxlsx::writeData(tab_name, x = "Dollars by Fund", startCol = 1, startRow = 4) %T>%
     openxlsx::addStyle(tab_name, createStyle(fontSize = 14), rows = 4, cols = 1) %T>%
     openxlsx::writeDataTable(
-      tab_name, summary_dollars, xy = c(1, 5),
+      tab_name, summary_fund, xy = c(1, 5),
+      tableStyle = "TableStyleLight1", bandedRows = FALSE,
+      headerStyle = createStyle(fgFill = "#16365C", fontColour = "white"),
+      # headerStyle = createStyle(fontSize = 12, textDecoration = "bold", border = "bottom", borderStyle = "thin"),
+      tableName = paste0("DollarsbyFund")) %T>%
+    ##dollars by service
+    openxlsx::writeData(tab_name, x = "Dollars by Service", startCol = 1, startRow = dim(summary_fund)[1]+7) %T>%
+    openxlsx::addStyle(tab_name, createStyle(fontSize = 14), rows = dim(summary_fund)[1]+7, cols = 1) %T>%
+    openxlsx::writeDataTable(
+      tab_name, summary_dollars, xy = c(1, dim(summary_fund)[1]+8),
       tableStyle = "TableStyleLight1", bandedRows = FALSE,
       headerStyle = createStyle(fgFill = "#16365C", fontColour = "white"),
       # headerStyle = createStyle(fontSize = 12, textDecoration = "bold", border = "bottom", borderStyle = "thin"),
       tableName = paste0("DollarsbyService")) %T>%
     ##positions by service
-    openxlsx::writeData(tab_name, x = "Positions by Service", startCol = 1, startRow = dim(summary_dollars)[1]+7) %T>%
-    openxlsx::addStyle(tab_name, createStyle(fontSize = 14), rows = dim(summary_dollars)[1]+7, cols = 1) %T>%
+    openxlsx::writeData(tab_name, x = "Positions by Service", startCol = 1, startRow = dim(summary_dollars)[1]+dim(summary_fund)[1]+10) %T>%
+    openxlsx::addStyle(tab_name, createStyle(fontSize = 14), rows = dim(summary_dollars)[1]+dim(summary_fund)[1]+10, cols = 1) %T>%
     openxlsx::writeDataTable(
-      tab_name, summary_positions, xy = c(1, dim(summary_dollars)[1]+8),
+      tab_name, summary_positions, xy = c(1, dim(summary_dollars)[1]+dim(summary_fund)[1]+11),
       tableStyle = "TableStyleLight1", bandedRows = FALSE,
       headerStyle = createStyle(fgFill = "#16365C", fontColour = "white"),
       # headerStyle = createStyle(fontSize = 12),
@@ -476,11 +497,11 @@ export_template <- function(agency, data) {
         filter(`Service ID` == i)
       
       oso <- osos %>%
+        ungroup() %>%
         filter(`Service ID` == i & `Fund Name` == "General") %>%
         select(-`Fund Name`) %>%
         group_by(`Agency Name`, `Service ID`, `Service Name`, OSO) %>%
-        summarise_if(is.numeric, sum, na.rm = TRUE) %>%
-        ungroup()
+        summarise_if(is.numeric, sum, na.rm = TRUE)
       
       options("openxlsx.numFmt" = "#,##0;(#,##0);--")
 
@@ -500,6 +521,6 @@ export_template <- function(agency, data) {
   }}
 
 ##testing
-export_template("M-R: Office of Children and Family Success", summary)
+export_template("Public Works", summary)
 
 map(agencies, export_template, summary)
