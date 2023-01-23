@@ -63,7 +63,7 @@ positions$cls <- readRDS(paste0(path$cls, "positions.Rds")) %>%
 
 positions <- positions %>%
   map(group_by, `Agency Name`, `Service Name`, `Service ID`, `Fund Name`) %>%
-  map(count)
+  map(., count)
 
 positions <- positions$planning %>%
   rename(`FY24 Positions - PROP` = n) %>%
@@ -541,6 +541,7 @@ export_template <- function(agency, data) {
   }}
 
 ##testing
-export_template("Public Works", summary)
+# export_template("Public Works", summary)
 
+# agencies <- setdiff(agencies, "Public Works")
 map(agencies, export_template, summary)
