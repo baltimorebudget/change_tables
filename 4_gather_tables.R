@@ -2,6 +2,7 @@ library(janitor)
 library(purrr)
 library(readxl)
 
+#get data from SharePonit files
 files <- list.files(path = "C:/Users/sara.brumfield2/OneDrive - City Of Baltimore/FY2024 Planning/03-TLS-BBMR Review/Agency Analysis Tools/",
                    pattern = paste0("^FY24 Change Table*"),
                    full.names = TRUE, recursive = TRUE)
@@ -21,10 +22,20 @@ import_tech_tables <- function(files) {
 }
 
 
-data <- map_df(files, import_tech_tables)
+data <- map(files, import_tech_tables) 
 
-df <- data %>%
-  select(ID, `Tollgate Recommendations`:`...19`) %>%
-  filter((!is.na(`...16`) & `...16` != "Object") & (!is.na(`...17`) & `...17` != "Subobject") & 
-           (!is.na(`...18`) & `...18` != "Amount") & (!is.na(`...19`) & `...19` != "Decision")) 
+df = data %>%
+  map(select, c(ID, `Tollgate Recommendations`:`...18`)) %>%
+  bind_rows() 
+
+#check for all services
+length(unique(df$ID))
+
+#clean up the file
+test <- df %>%
+  filter((!is.na(`...3`) & `...3` != "Object") & (!is.na(`...4`) & `...4` != "Subobject") & 
+           (!is.na(`...5`) & `...5` != "Amount")) %>%
+  rename(`Service ID` = ID, `Object` = `...3`, `Subobject` = `...4`, `Amount` = `...5`, `BPFS Adjustment` = `Tollgate Recommendations`)
+
+
 
