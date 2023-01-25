@@ -1,6 +1,10 @@
+.libPaths("C:/Users/sara.brumfield2/OneDrive - City Of Baltimore/Documents/r_library")
 library(janitor)
 library(purrr)
 library(readxl)
+library(stringr)
+library(dplyr)
+library(tidyverse)
 
 #get data from SharePonit files
 files <- list.files(path = "C:/Users/sara.brumfield2/OneDrive - City Of Baltimore/FY2024 Planning/03-TLS-BBMR Review/Agency Analysis Tools/",
@@ -35,9 +39,11 @@ length(unique(df$ID))
 
 #clean up the file
 output <- df %>%
-  filter((!is.na(`...3`) & `...3` != "Object") & (!is.na(`...4`) & `...4` != "Subobject") & 
-           (!is.na(`...5`) & `...5` != "Amount")) %>%
-  rename(`Service ID` = ID, `Object` = `...3`, `Subobject` = `...4`, `Amount` = `...5`, `BPFS Adjustment` = `Tollgate Recommendations`)
+  filter(!(`Tollgate Recommendations` %in% c("None", "N/A", "Technical Adjustments", "Item", "Enter item here", "Total", "Savings Ideas", "Tollgate Notes")) &
+           !is.na(`Tollgate Recommendations`)) %>%
+  # filter((!is.na(`...4`) & `...4` != "Object") & (!is.na(`...5`) & `...5` != "Subobject") & 
+  #          (!is.na(`...6`) & `...6` != "Amount")) %>%
+  rename(`Service ID` = ID, `Object` = `...4`, `Subobject` = `...5`, `Amount` = `...6`, `BPFS Adjustment` = `Tollgate Recommendations`)
 
-
-
+#export
+write.csv(output, "outputs/FY24 Propoposal Technical Adjustments for BPFS.csv")
