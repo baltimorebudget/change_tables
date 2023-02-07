@@ -71,8 +71,13 @@ for(a in agencies){
   
   file_path <- paste0("outputs/", a," Change Tables.xlsx")
   
-  x <- df %>% filter(Agency == a) %>%
-    select(-Pillar, -Service, -Agency)
+  x <- df %>% filter(Agency == a & Amount != "Pending" & `Change Table (GF Only)` != "TLS Adjustments") %>%
+    select(-Pillar, -Service, -Agency) %>%
+    mutate(Amount = as.numeric(Amount))
+  
+  # x$`Amount`[x$`Change Table (GF Only)` == "Adjustments"] <- "Amount"
+  
+  num_style <- createStyle(numFmt = "#,##0;(#,##0)")
   
   header_style <- createStyle(fgFill = "white", border = "TopBottomLeftRight",
                               borderColour = "black", textDecoration = "bold", fontColour = "darkblue",
@@ -82,18 +87,26 @@ for(a in agencies){
                        borderColour = "black", textDecoration = "bold", fontColour = "white",
                        wrapText = TRUE)
   
+  style2 <- createStyle(textDecoration = c("bold", "italic"),
+                       wrapText = TRUE)
+  
   style_rows <- which(x$`Amount`=="Amount") + 1
   
+  style_rows2 <- which(x$`Change Table (GF Only)` %in% c("FY2023 Adopted", "CLS Adjustments", "Request Adjustments")) + 1
+  
+  num_rows <- which(x$`Amount`!="Amount") + 1
+    
   wb <- createWorkbook()
   addWorksheet(wb, a)
   writeDataTable(wb, 1, x = x)
   
-  addStyle(wb, 1, style = style, rows = style_rows, cols = 1:5, gridExpand = TRUE, stack = FALSE)
-  addStyle(wb, 1, style = header_style, rows = 1, cols = 1:5, gridExpand = TRUE, stack = FALSE)
-  setColWidths(wb, 1, cols = 1, widths = 35)
-  setColWidths(wb, 1, cols = 2, widths = 10)
-  setColWidths(wb, 1, cols = 3, widths = 45)
-  setColWidths(wb, 1, cols = 4:5, widths = 17)
+  addStyle(wb, 1, style = style, rows = style_rows, cols = 1:4, gridExpand = TRUE, stack = FALSE)
+  addStyle(wb, 1, style = header_style, rows = 1, cols = 1:4, gridExpand = TRUE, stack = FALSE)
+  addStyle(wb, 1, style = style2, rows = style_rows2, cols = 1:4, gridExpand = TRUE, stack = FALSE)
+  addStyle(wb, 1, style = num_style, rows = num_rows, cols = 3, gridExpand = TRUE, stack = FALSE)
+  setColWidths(wb, 1, cols = 1, widths = 10)
+  setColWidths(wb, 1, cols = 2, widths = 45)
+  setColWidths(wb, 1, cols = 3:4, widths = 17)
   
   saveWorkbook(wb, file_path, overwrite = TRUE)
   
