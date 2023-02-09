@@ -65,17 +65,8 @@ df = data %>%
   map(rename, `Amount` = `...12`, `Tollgate Decision` = `...13`) %>%
   bind_rows()
 
-agencies <- df %>% select(Agency) %>% distinct()
-
-for(a in agencies){
-  
-  file_path <- paste0("outputs/", a," Change Tables.xlsx")
-  
-  x <- df %>% filter(Agency == a & Amount != "Pending" & `Change Table (GF Only)` != "TLS Adjustments") %>%
-    select(-Pillar, -Service, -Agency) %>%
-    mutate(Amount = as.numeric(Amount))
-  
-  # x$`Amount`[x$`Change Table (GF Only)` == "Adjustments"] <- "Amount"
+pillars <- df %>% select(Pillar) %>% distinct()
+consolidate_tables <- function(df = x, tab_name = a, type, file_name = file_path, save= TRUE) {
   
   num_style <- createStyle(numFmt = "#,##0;(#,##0)")
   
@@ -88,27 +79,71 @@ for(a in agencies){
                        wrapText = TRUE)
   
   style2 <- createStyle(textDecoration = c("bold", "italic"),
-                       wrapText = TRUE)
+                        wrapText = TRUE)
   
-  style_rows <- which(x$`Amount`=="Amount") + 1
+  style_rows <- which(x$`Change Table (GF Only)`=="Adjustments") + 1
   
   style_rows2 <- which(x$`Change Table (GF Only)` %in% c("FY2023 Adopted", "CLS Adjustments", "Request Adjustments")) + 1
   
   num_rows <- which(x$`Amount`!="Amount") + 1
-    
-  wb <- createWorkbook()
-  addWorksheet(wb, a)
-  writeDataTable(wb, 1, x = x)
   
-  addStyle(wb, 1, style = style, rows = style_rows, cols = 1:4, gridExpand = TRUE, stack = FALSE)
-  addStyle(wb, 1, style = header_style, rows = 1, cols = 1:4, gridExpand = TRUE, stack = FALSE)
-  addStyle(wb, 1, style = style2, rows = style_rows2, cols = 1:4, gridExpand = TRUE, stack = FALSE)
-  addStyle(wb, 1, style = num_style, rows = num_rows, cols = 3, gridExpand = TRUE, stack = FALSE)
-  setColWidths(wb, 1, cols = 1, widths = 10)
-  setColWidths(wb, 1, cols = 2, widths = 45)
-  setColWidths(wb, 1, cols = 3:4, widths = 17)
+  excel <- switch(type,
+                  "new" = openxlsx::createWorkbook(),
+                  "existing" = openxlsx::loadWorkbook(file_name)) %T>%
+    openxlsx::addWorksheet(tab_name) %T>%
+    openxlsx::writeDataTable(tab_name, x = df) %T>%
+    addStyle(tab_name, style = style, rows = style_rows, cols = 1:4, gridExpand = TRUE, stack = FALSE) %T>%
+    addStyle(tab_name, style = header_style, rows = 1, cols = 1:4, gridExpand = TRUE, stack = FALSE) %T>%
+    addStyle(tab_name, style = style2, rows = style_rows2, cols = 1:4, gridExpand = TRUE, stack = FALSE) %T>%
+    addStyle(tab_name, style = num_style, rows = num_rows, cols = 3, gridExpand = TRUE, stack = FALSE) %T>%
+    setColWidths(tab_name, cols = 1, widths = 10) %T>%
+    setColWidths(tab_name, cols = 2, widths = 45) %T>%
+    setColWidths(tab_name, cols = 3:4, widths = 17)
   
-  saveWorkbook(wb, file_path, overwrite = TRUE)
-  
+  saveWorkbook(excel, file_name, overwrite = TRUE)
+
   message(a, " change tables exported.")
+  # 
+  # if (save == TRUE) {
+  #   openxlsx::saveWorkbook(excel, file_name, overwrite = TRUE)
+  #   base::message(tab_name, ' tab created in the file saved as ', file_name)
+  # } else {
+  #   base::message(tab_name, ' not saved. Use openxlsx::saveWorkbook().')
+  #   return(excel)
+  # }
+}
+
+
+for (p in pillars) {
+  
+  file_path <- paste0("outputs/", p," Pillar Change Tables.xlsx")
+  
+  pillar_data <- df %>% filter(Pillar == p & Amount != "Pending" & `Change Table (GF Only)` != "TLS Adjustments")
+  
+  agencies <- pillar_data %>%
+    group_by(`Agency`) %>%
+    ungroup() %>%
+    extract2("Agency") %>%
+    unique() %>%
+    sort()
+    
+  for(a in agencies){
+    
+    x <- pillar_data %>% filter(Agency == a) %>%
+      select(-Pillar, -Service, -Agency) %>%
+      mutate(Amount = as.numeric(Amount))
+  
+    excel <- suppressMessages(
+      consolidate_tables(df = x, tab_name = substr(a, 1,30), file_name = file_path,
+                    save = FALSE,
+                    type = ifelse(a == agencies[[1]], "new", "existing")))
+    
+    # openxlsx::saveWorkbook(excel, file_name, overwrite = TRUE)    
+    # 
+    cat(a, "change table saved in", p, "\n")
+  }
+  
+  # openxlsx::saveWorkbook(excel, file_path, overwrite = TRUE)   
+  # message(p, " change tables exported.")
+  
 }
