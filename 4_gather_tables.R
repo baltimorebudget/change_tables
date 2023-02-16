@@ -59,17 +59,17 @@ data <- map(files, import_tables)
 df = data %>%
   map(select, c(Agency, ID, `Service Summary`:`...2`, `Change Table (GF Only)`, `...12`, `...13`)) %>%
   # map(~ mutate(., Pillar = ...2[`Service Summary`=="Pillar"][2])) %>%
-  map(~ mutate(., Service = ...2[`Service Summary`=="Service Name"][2])) %>%
+  # map(~ mutate(., Service = ...2[`Service Summary`=="Service Name"][2])) %>%
   map(filter, !is.na(`Change Table (GF Only)`)) %>%
   map(select, -`Service Summary`, -`...2`) %>%
   map(rename, `Amount` = `...12`, `Tollgate Decision` = `...13`) %>%
   bind_rows()
 
-pillar_map <- readRDS("G:/Budget Publications/automation/0_data_prep/outputs/fy24_tls/expenditure.Rds") %>% select( `Service ID`, `Objective Name`) %>% distinct()
+pillar_map <- readRDS("G:/Budget Publications/automation/0_data_prep/outputs/fy24_tls/expenditure.Rds") %>% select( `Service ID`, `Service Name`, `Objective Name`) %>% distinct()
 
 pillar_join <- df %>% left_join(pillar_map, by = c("ID" = "Service ID")) %>%
-  select(-Pillar) %>%
-  rename(Pillar = `Objective Name`)
+  # select(-Pillar) %>%
+  rename(Pillar = `Objective Name`, Service = `Service Name`)
 
 pillars <- pillar_join %>% 
   group_by(`Pillar`) %>%
