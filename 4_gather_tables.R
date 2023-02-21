@@ -13,8 +13,14 @@ devtools::load_all("G:/Analyst Folders/Sara Brumfield/_packages/bbmR")
 files <- list.files(path = "C:/Users/sara.brumfield2/OneDrive - City Of Baltimore/FY2024 Planning/03-TLS-BBMR Review/Agency Analysis Tools/",
                    pattern = paste0("^FY24 Change Table*"),
                    full.names = TRUE, recursive = TRUE)
-extract_table <- function(df) {
+
+extract_tech_table <- function(df) {
   table <- df[which(df$`Tollgate Recommendations`=="Technical Adjustments"):which(df$`Tollgate Recommendations`=="Total")[1],]
+  return(table)
+}
+
+extract_savings_table <- function(df) {
+  table <- df[which(df$`Tollgate Recommendations`=="Savings Ideas"):which(df$`Tollgate Recommendations`=="Total")[2],]
   return(table)
 }
 
@@ -26,7 +32,28 @@ import_tech_tables <- function(files) {
     for (s in sheets) {
       z = read_excel(file, s) %>% 
         select(`Service Summary`, `...2`, `Tollgate Recommendations`:`...18`) %>%
-        extract_table() %>%
+        extract_tech_table() %>%
+        mutate(ID = s,
+               Agency = agency)
+      # x = read_excel(file, s) %>%
+      #   mutate(ID = s,
+      #          Agency = agency)
+      print(paste0(s, " added from ", file))
+      df = rbind(df, z)
+    }
+    return(df)
+  } 
+}
+
+import_savings_tables <- function(files) {
+  for (file in files) {
+    agency = str_extract(file, "((?<=C:/Users/sara.brumfield2/OneDrive - City Of Baltimore/FY2024 Planning/03-TLS-BBMR Review/Agency Analysis Tools/FY24 Change Table ).+(?=.xlsx))")
+    sheets = na.omit(str_extract(excel_sheets(file), "\\d{3}"))
+    df = data.frame()
+    for (s in sheets) {
+      z = read_excel(file, s) %>% 
+        select(`Service Summary`, `...2`, `Tollgate Recommendations`:`...18`) %>%
+        extract_savings_table() %>%
         mutate(ID = s,
                Agency = agency)
       # x = read_excel(file, s) %>%
@@ -64,9 +91,9 @@ data <- map(files, import_tech_tables) %>%
 df = data %>%
   select(-`Service Summary`, -`...2`) %>%
   relocate(Agency, .before = `Tollgate Recommendations`) %>%
-  relocate(ID, .after = Agency) %>%
-  rename(`Service ID` = ID, `Object` = `...16`, `Subobject` = `...17`, `Amount` = `...18`, `BPFS Adjustment` = `Tollgate Recommendations`) %>%
-  filter()
+  relocate(ID, .before = `Agency`) %>%
+  rename(`Object` = `...4`, `Subobject` = `...5`, `Amount` = `...6`, `BPFS Adjustment` = `Tollgate Recommendations`) %>%
+  filter(!(`BPFS Adjustment` %in% c("Enter item here", "Technical Adjustments", "Item", "Total")) & !is.na(`BPFS Adjustment`))
 
 
 #check for all services
@@ -82,7 +109,27 @@ length(unique(df$ID))
 #   filter(`BPFS Adjustment` != "Item")
 
 #export
-export_excel(df, "outputs/FY24 Propoposal Technical Adjustments for BPFS.xlsx")
+export_excel(df, "Techincal Adjustments", "outputs/FY24 Propoposal Technical Adjustments for BPFS.xlsx")
+
+##savings ideas tables =====
+data <- map(files, import_savings_tables) %>%
+  bind_rows()
+
+##clean up file
+df = data %>%
+  select(-`Service Summary`, -`...2`) %>%
+  relocate(Agency, .before = `Tollgate Recommendations`) %>%
+  relocate(ID, .before = `Agency`) %>%
+  rename(`Object` = `...4`, `Subobject` = `...5`, `Amount` = `...6`, `BPFS Adjustment` = `Tollgate Recommendations`) %>%
+  filter(!(`BPFS Adjustment` %in% c("Enter item here", "Savings Ideas", "Item", "Total")) & !is.na(`BPFS Adjustment`))
+
+
+#check for all services
+length(unique(df$ID))
+
+
+#export
+export_excel(df, "Techincal Adjustments", "outputs/FY24 Propoposal Technical Adjustments for BPFS.xlsx")
 
 ##change tables ======
 
