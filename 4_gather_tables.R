@@ -129,7 +129,7 @@ length(unique(df$ID))
 
 
 #export
-export_excel(df, "Techincal Adjustments", "outputs/FY24 Propoposal Technical Adjustments for BPFS.xlsx")
+export_excel(df, "Savings Ideas", "outputs/FY24 Proposal Savings Ideas.xlsx")
 
 ##change tables ======
 
