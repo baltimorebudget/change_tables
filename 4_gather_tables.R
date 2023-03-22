@@ -10,6 +10,7 @@ library(magrittr)
 devtools::load_all("G:/Analyst Folders/Sara Brumfield/_packages/bbmR")
 
 #get data from SharePonit files
+##moved to BBMR package//make updates to functions there instead
 files <- list.files(path = "C:/Users/sara.brumfield2/OneDrive - City Of Baltimore/FY2024 Planning/03-TLS-BBMR Review/Agency Analysis Tools/",
                    pattern = paste0("^FY24 Change Table*"),
                    full.names = TRUE, recursive = TRUE)
@@ -204,7 +205,7 @@ consolidate_tables <- function(df = x, tab_name = a, type, file_name = file_path
   # }
 }
 
-
+##organized by pillar for Prelim reference for analysts ====
 for (p in pillars) {
   
   file_path <- paste0("outputs/", p," Pillar Change Tables.xlsx")
